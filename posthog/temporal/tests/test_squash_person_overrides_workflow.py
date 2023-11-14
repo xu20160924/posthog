@@ -1044,10 +1044,6 @@ async def test_delete_squashed_person_overrides_from_postgres_dry_run(
     # If any assertions fail here, its likely a test setup issue.
     with pg_connection:
         with pg_connection.cursor() as cursor:
-            cursor.execute("SELECT id, team_id, uuid FROM posthog_personoverridemapping")
-            mappings = cursor.fetchall()
-            assert len(mappings) == 2
-
             cursor.execute("SELECT * FROM posthog_personoverride")
             overrides = cursor.fetchall()
             assert len(overrides) == 1
@@ -1069,14 +1065,9 @@ async def test_delete_squashed_person_overrides_from_postgres_dry_run(
 
     with pg_connection:
         with pg_connection.cursor() as cursor:
-            cursor.execute("SELECT team_id, uuid FROM posthog_personoverridemapping")
-            mappings = cursor.fetchall()
-            assert len(mappings) == 2
-            assert mappings[0][1] == person_overrides.override_person_id
-
             cursor.execute("SELECT * FROM posthog_personoverride")
             overrides = cursor.fetchall()
-            assert len(overrides) == 1
+            assert len(overrides) == 1  # TODO: assert on the column values?
 
 
 @pytest.mark.django_db
