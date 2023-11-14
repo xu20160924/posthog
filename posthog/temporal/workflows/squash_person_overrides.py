@@ -87,16 +87,6 @@ WHERE
     AND created_at >= 0;
 """
 
-SELECT_ID_FROM_OVERRIDE_UUID = """
-SELECT
-    id
-FROM
-    posthog_personoverridemapping
-WHERE
-    team_id = %(team_id)s
-    AND uuid = %(uuid)s;
-"""
-
 DELETE_FROM_PERSON_OVERRIDES = """
 DELETE FROM
     posthog_personoverride
@@ -107,13 +97,6 @@ WHERE
     AND version = %(latest_version)s
 RETURNING
     old_person_id;
-"""
-
-DELETE_FROM_PERSON_OVERRIDE_MAPPINGS = """
-DELETE FROM
-    posthog_personoverridemapping
-WHERE
-    id = %(id)s;
 """
 
 
@@ -458,37 +441,10 @@ async def delete_squashed_person_overrides_from_postgres(inputs: QueryInputs) ->
             for person_override_to_delete in inputs.iter_person_overides_to_delete():
                 activity.logger.debug("%s", person_override_to_delete)
 
-                cursor.execute(
-                    SELECT_ID_FROM_OVERRIDE_UUID,
-                    {
-                        "team_id": person_override_to_delete.team_id,
-                        "uuid": person_override_to_delete.old_person_id,
-                    },
-                )
-
-                row = cursor.fetchone()
-                if not row:
-                    continue
-                old_person_id = row[0]
-
-                cursor.execute(
-                    SELECT_ID_FROM_OVERRIDE_UUID,
-                    {
-                        "team_id": person_override_to_delete.team_id,
-                        "uuid": person_override_to_delete.override_person_id,
-                    },
-                )
-
-                row = cursor.fetchone()
-                if not row:
-                    continue
-
-                override_person_id = row[0]
-
                 parameters = {
                     "team_id": person_override_to_delete.team_id,
-                    "old_person_id": old_person_id,
-                    "override_person_id": override_person_id,
+                    "old_person_id": person_override_to_delete.old_person_id,
+                    "override_person_id": person_override_to_delete.override_person_id,
                     "latest_version": person_override_to_delete.latest_version,
                 }
 
@@ -502,20 +458,6 @@ async def delete_squashed_person_overrides_from_postgres(inputs: QueryInputs) ->
                     continue
 
                 cursor.execute(DELETE_FROM_PERSON_OVERRIDES, parameters)
-
-                row = cursor.fetchone()
-                if not row:
-                    # There is no existing mapping for this (old_person_id, override_person_id) pair.
-                    # It could be that a newer one was added (with a later version).
-                    continue
-                deleted_id = row[0]
-
-                cursor.execute(
-                    DELETE_FROM_PERSON_OVERRIDE_MAPPINGS,
-                    {
-                        "id": deleted_id,
-                    },
-                )
 
 
 @contextlib.asynccontextmanager
