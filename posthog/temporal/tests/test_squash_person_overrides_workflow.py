@@ -939,7 +939,7 @@ def team_id(query_inputs, organization_uuid, pg_connection):
 
 @pytest.fixture
 def person_overrides(query_inputs, team_id, pg_connection):
-    """Create a PersonOverrideMapping and a PersonOverride.
+    """Create a PersonOverride.
 
     We cannot use the Django ORM safely in an async context, so we INSERT INTO directly
     on the database. This means we need to clean up after ourselves, which we do after
@@ -951,25 +951,6 @@ def person_overrides(query_inputs, team_id, pg_connection):
 
     with pg_connection:
         with pg_connection.cursor() as cursor:
-            person_ids = []
-            for person_uuid in (override_person_id, old_person_id):
-                cursor.execute(
-                    """
-                    INSERT INTO posthog_personoverridemapping(
-                        team_id,
-                        uuid
-                    )
-                    VALUES (
-                        %(team_id)s,
-                        %(uuid)s
-                    )
-                    ON CONFLICT("team_id", "uuid") DO NOTHING
-                    RETURNING id
-                    """,
-                    {"team_id": team_id, "uuid": person_uuid},
-                )
-                person_ids.append(cursor.fetchone())
-
             cursor.execute(
                 """
                 INSERT INTO posthog_personoverride(
@@ -989,8 +970,8 @@ def person_overrides(query_inputs, team_id, pg_connection):
                 """,
                 {
                     "team_id": team_id,
-                    "old_person_id": person_ids[1],
-                    "override_person_id": person_ids[0],
+                    "old_person_id": old_person_id,
+                    "override_person_id": override_person_id,
                 },
             )
 
@@ -1000,11 +981,7 @@ def person_overrides(query_inputs, team_id, pg_connection):
         with pg_connection.cursor() as cursor:
             cursor.execute(
                 "DELETE FROM posthog_personoverride WHERE team_id = %s AND old_person_id = %s",
-                [team_id, person_ids[1]],
-            )
-            cursor.execute(
-                "DELETE FROM posthog_personoverridemapping WHERE team_id = %s AND (uuid = %s OR uuid = %s)",
-                [team_id, old_person_id, override_person_id],
+                [team_id, old_person_id],
             )
 
 
