@@ -558,63 +558,6 @@ class SquashPersonOverridesWorkflow(PostHogWorkflow):
     Squashing refers to the process of updating the person_id associated with an event
     to match the new id assigned via a person override. This process must be done
     regularly to control the size of the person_overrides table.
-
-    For example, let's imagine the initial state of tables as:
-
-    posthog_personoverridesmapping
-
-    | id      | uuid                                   |
-    | ------- + -------------------------------------- |
-    | 1       | '179bed4d-0cf9-49a5-8826-b4c36348fae4' |
-    | 2       | 'ced21432-7528-4045-bc22-855cbe69a6c1' |
-
-    posthog_personoverride
-
-    | old_person_id | override_person_id |
-    | ------------- + ------------------ |
-    | 1             | 2                  |
-
-    The activity select_persons_to_delete will select the uuid with id 1 as safe to delete
-    as its the only old_person_id at the time of starting.
-
-    While executing this job, a new override (2->3) may be inserted, leaving both tables as:
-
-    posthog_personoverridesmapping
-
-    | id      | uuid                                   |
-    | ------- + -------------------------------------- |
-    | 1       | '179bed4d-0cf9-49a5-8826-b4c36348fae4' |
-    | 2       | 'ced21432-7528-4045-bc22-855cbe69a6c1' |
-    | 3       | 'b57de46b-55ad-4126-9a92-966fac570ec4' |
-
-    posthog_personoverride
-
-    | old_person_id | override_person_id |
-    | ------------- + ------------------ |
-    | 1             | 3                  |
-    | 2             | 3                  |
-
-    Upon executing the squash_events_partition events with person_id 1 or 2 will be correctly
-    updated to reference person_id 3.
-
-    At the end, we'll cleanup the tables by deleting the old_person_ids we deemed safe to do
-    so (1) from both tables:
-
-    posthog_personoverridesmapping
-
-    | id      | uuid                                   |
-    | ------- + -------------------------------------- |
-    | 2       | 'ced21432-7528-4045-bc22-855cbe69a6c1' |
-    | 3       | 'b57de46b-55ad-4126-9a92-966fac570ec4' |
-
-    posthog_personoverride
-
-    | old_person_id | override_person_id |
-    | ------------- + ------------------ |
-    | 2             | 3                  |
-
-    Any overrides that arrived during the job will be left there for the next job run to clean
-    up. These will be a no-op for the next job run as the override will already have been applied.
     """
 
     @staticmethod
