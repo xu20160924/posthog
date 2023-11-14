@@ -229,7 +229,7 @@ def newer_overrides(person_overrides_data):
 async def test_prepare_dictionary_with_older_overrides_present(
     query_inputs, activity_environment, person_overrides_data, older_overrides
 ):
-    """Test a DICTIONARY contains latest available mappings."""
+    """Test a DICTIONARY contains latest available overrides."""
     query_inputs.dictionary_name = "fancy_dictionary"
     query_inputs.dry_run = False
 
