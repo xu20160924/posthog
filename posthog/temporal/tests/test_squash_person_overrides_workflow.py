@@ -1075,10 +1075,6 @@ async def test_delete_squashed_person_overrides_from_postgres_with_newer_overrid
     # If any assertions fail here, its likely a test setup issue.
     with pg_connection:
         with pg_connection.cursor() as cursor:
-            cursor.execute("SELECT id, team_id, uuid FROM posthog_personoverridemapping")
-            mappings = cursor.fetchall()
-            assert len(mappings) == 2
-
             cursor.execute("SELECT team_id, old_person_id, override_person_id FROM posthog_personoverride")
             overrides = cursor.fetchall()
             assert len(overrides) == 1
@@ -1097,9 +1093,7 @@ async def test_delete_squashed_person_overrides_from_postgres_with_newer_overrid
                 """,
                 {
                     "team_id": team_id,
-                    "old_person_id": [
-                        mapping[0] for mapping in mappings if mapping[2] == person_overrides.old_person_id
-                    ][0],
+                    "old_person_id": person_overrides.old_person_id,
                 },
             )
 
@@ -1121,14 +1115,6 @@ async def test_delete_squashed_person_overrides_from_postgres_with_newer_overrid
 
     with pg_connection:
         with pg_connection.cursor() as cursor:
-            cursor.execute("SELECT id, team_id, uuid FROM posthog_personoverridemapping")
-            mappings = cursor.fetchall()
-
-            # Nothing was deleted from mappings table
-            assert len(mappings) == 2
-            assert person_overrides.override_person_id in [mapping[2] for mapping in mappings]
-            assert person_overrides.old_person_id in [mapping[2] for mapping in mappings]
-
             cursor.execute("SELECT team_id, old_person_id, override_person_id, version FROM posthog_personoverride")
             overrides = cursor.fetchall()
 
@@ -1137,13 +1123,8 @@ async def test_delete_squashed_person_overrides_from_postgres_with_newer_overrid
 
             team_id, old_person_id, override_person_id, version = overrides[0]
             assert team_id == team_id
-            assert (
-                old_person_id == [mapping[0] for mapping in mappings if mapping[2] == person_overrides.old_person_id][0]
-            )
-            assert (
-                override_person_id
-                == [mapping[0] for mapping in mappings if mapping[2] == person_overrides.override_person_id][0]
-            )
+            assert old_person_id == person_overrides.old_person_id
+            assert override_person_id == person_overrides.override_person_id
             assert version == 2
 
 
