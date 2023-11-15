@@ -308,57 +308,6 @@ def _merge_people(
 
     cursor.execute(
         """
-            WITH insert_id AS (
-                INSERT INTO posthog_personoverridemapping(
-                    team_id,
-                    uuid
-                )
-                VALUES (
-                    %(team_id)s,
-                    %(old_person_uuid)s
-                )
-                ON CONFLICT("team_id", "uuid") DO NOTHING
-                RETURNING id
-            )
-            SELECT * FROM insert_id
-            UNION ALL
-            -- ON CONFLICT nothing is returned, so we get the id here.
-            -- Fear not, the constraints on personoverride will handle any inconsistencies.
-            -- This mapping table is really nothing more than a mapping.
-            SELECT id
-            FROM posthog_personoverridemapping
-            WHERE uuid = %(old_person_uuid)s
-        """,
-        {"team_id": team.id, "old_person_uuid": old_person_uuid},
-    )
-    old_person_id = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
-            WITH insert_id AS (
-                INSERT INTO posthog_personoverridemapping(
-                    team_id,
-                    uuid
-                )
-                VALUES (
-                    %(team_id)s,
-                    %(override_person_uuid)s
-                )
-                ON CONFLICT("team_id", "uuid") DO NOTHING
-                RETURNING id
-            )
-            SELECT * FROM insert_id
-            UNION ALL
-            SELECT id
-            FROM posthog_personoverridemapping
-            WHERE uuid = %(override_person_uuid)s
-        """,
-        {"team_id": team.id, "override_person_uuid": override_person_uuid},
-    )
-    override_person_id = cursor.fetchone()[0]
-
-    cursor.execute(
-        """
             INSERT INTO posthog_personoverride(
                 team_id,
                 old_person_id,
@@ -383,8 +332,8 @@ def _merge_people(
         """,
         {
             "team_id": team.id,
-            "old_person_id": old_person_id,
-            "override_person_id": override_person_id,
+            "old_person_id": old_person_uuid,
+            "override_person_id": override_person_uuid,
             "oldest_event": oldest_event,
         },
     )
@@ -422,16 +371,8 @@ def test_person_override_merge(people, team, oldest_event):
         _merge_people(team, merge_cursor, old_person.uuid, override_person.uuid, oldest_event)
         merge_cursor.execute("COMMIT")
 
-    assert [_[0] for _ in PersonOverrideMapping.objects.all().values_list("uuid")] == [
-        old_person.uuid,
-        override_person.uuid,
-    ]
-
-    old_person_id = PersonOverrideMapping.objects.filter(uuid=old_person.uuid).all()[0].id
-    override_person_id = PersonOverrideMapping.objects.filter(uuid=override_person.uuid).all()[0].id
-
     assert list(PersonOverride.objects.all().values_list("old_person_id", "override_person_id")) == [
-        (old_person_id, override_person_id)
+        (old_person.uuid, override_person.uuid)
     ]
 
 
@@ -456,27 +397,16 @@ def test_person_override_allow_consecutive_merges(people, team, oldest_event):
         )
         second_cursor.execute("COMMIT")
 
-    assert [_[0] for _ in PersonOverrideMapping.objects.all().values_list("uuid")] == [
-        old_person.uuid,
-        override_person.uuid,
-        new_override_person.uuid,
-    ]
+    mappings = set(PersonOverride.objects.all().values_list("old_person_id", "override_person_id"))
 
-    old_person_id = PersonOverrideMapping.objects.filter(uuid=old_person.uuid).all()[0].id
-    override_person_id = PersonOverrideMapping.objects.filter(uuid=override_person.uuid).all()[0].id
-    new_override_person_id = PersonOverrideMapping.objects.filter(uuid=new_override_person.uuid).all()[0].id
-
-    mappings = list(PersonOverride.objects.all().values_list("old_person_id", "override_person_id"))
-
-    assert sorted(mappings) == sorted(
-        [
-            (override_person_id, new_override_person_id),
-            (old_person_id, new_override_person_id),
-        ]
-    ), f"{mappings=} {old_person_id=}, {override_person_id=}, {new_override_person_id=}"
+    assert mappings == {
+        (override_person.uuid, new_override_person.uuid),
+        (old_person.uuid, new_override_person.uuid),
+    }
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.xfail()  # TODO: re-evaluate this, as we can no longer enforce this constraint
 def test_person_override_disallows_concurrent_merge(people, team, oldest_event):
     """Test concurrent merges.
 
@@ -542,17 +472,9 @@ def test_person_override_disallows_concurrent_merge(people, team, oldest_event):
             done_t1_event.wait(10)
             first_cursor.execute("COMMIT")
 
-    assert [_[0] for _ in PersonOverrideMapping.objects.all().values_list("uuid")] == [
-        override_person.uuid,
-        new_override_person.uuid,
-    ]
-
-    override_person_id = PersonOverrideMapping.objects.filter(uuid=override_person.uuid).all()[0].id
-    new_override_person_id = PersonOverrideMapping.objects.filter(uuid=new_override_person.uuid).all()[0].id
-
-    assert list(PersonOverride.objects.all().values_list("old_person_id", "override_person_id")) == [
-        (override_person_id, new_override_person_id)
-    ]
+    assert set(PersonOverride.objects.all().values_list("old_person_id", "override_person_id")) == {
+        (override_person.uuid, new_override_person.uuid),
+    }
 
 
 @pytest.mark.django_db(transaction=True)
@@ -612,19 +534,8 @@ def test_person_override_disallows_concurrent_merge_different_order(people, team
         done_t2_event.wait(10)
         second_cursor.execute("COMMIT")
 
-    # The main difference from the previous thread is we now expect all 3 UUIDs to be there.
-    assert [_[0] for _ in PersonOverrideMapping.objects.all().values_list("uuid")] == [
-        old_person.uuid,
-        override_person.uuid,
-        new_override_person.uuid,
-    ]
-
-    old_person_id = PersonOverrideMapping.objects.filter(uuid=old_person.uuid).all()[0].id
-    override_person_id = PersonOverrideMapping.objects.filter(uuid=override_person.uuid).all()[0].id
-    new_override_person_id = PersonOverrideMapping.objects.filter(uuid=new_override_person.uuid).all()[0].id
-
     # And the merge of old_person_id to be updated to new_override_person_id
-    assert list(PersonOverride.objects.all().values_list("old_person_id", "override_person_id", "version")) == [
-        (override_person_id, new_override_person_id, 1),
-        (old_person_id, new_override_person_id, 2),
-    ]
+    assert set(PersonOverride.objects.all().values_list("old_person_id", "override_person_id", "version")) == {
+        (override_person.uuid, new_override_person.uuid, 1),
+        (old_person.uuid, new_override_person.uuid, 2),
+    }
