@@ -481,7 +481,7 @@ def pg_plugin_server_query_timing():
             pass
 
 
-POSTGRES_TABLES = ["posthog_personoverride", "posthog_personoverridemapping"]
+POSTGRES_TABLES = ["posthog_personoverride"]
 
 
 @app.task(ignore_result=True)
