@@ -144,6 +144,7 @@ class PersonOverride(models.Model):
     id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")
     team: models.ForeignKey = models.ForeignKey("Team", on_delete=models.CASCADE)
 
+    # TODO: these might as well be renamed to _uuid for clarity
     old_person_id = models.UUIDField()
     override_person_id = models.UUIDField()
 
