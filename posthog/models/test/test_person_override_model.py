@@ -270,7 +270,7 @@ def _merge_people(
     old_person_uuid,
     override_person_uuid,
     oldest_event,
-    can_lock_event=None,
+    can_proceed_event=None,
     done_event=None,
 ):
     """
@@ -299,12 +299,10 @@ def _merge_people(
         {"team_id": team.id, "old_person_uuid": old_person_uuid},
     )
 
-    # The following INSERTs and UPDATEs will lock posthog_personoverridemapping
-    # Until the constraints are checked, which happens when the transaction commits.
-    if can_lock_event is not None:
+    if can_proceed_event is not None:
         # Wait until we are allowed to lock.
         # Used in concurrency testing.
-        can_lock_event.wait(10)
+        can_proceed_event.wait(10)
 
     cursor.execute(
         """
@@ -434,7 +432,7 @@ def test_person_override_disallows_concurrent_merge(people, team, oldest_event):
         # This allows us to control the order in which the transactions are committed, so that we can assert their
         # behavior consistently.
 
-        can_lock_event = Event()
+        can_proceed_event = Event()
         done_t1_event = Event()
         done_t2_event = Event()
         t1 = Thread(
@@ -446,7 +444,7 @@ def test_person_override_disallows_concurrent_merge(people, team, oldest_event):
                 override_person.uuid,
                 oldest_event,
             ),
-            kwargs={"can_lock_event": can_lock_event, "done_event": done_t1_event},
+            kwargs={"can_proceed_event": can_proceed_event, "done_event": done_t1_event},
         )
         t2 = Thread(
             target=_merge_people,
@@ -468,7 +466,7 @@ def test_person_override_disallows_concurrent_merge(people, team, oldest_event):
         second_cursor.execute("COMMIT")
 
         with pytest.raises(IntegrityError):
-            can_lock_event.set()
+            can_proceed_event.set()
             done_t1_event.wait(10)
             first_cursor.execute("COMMIT")
 
@@ -498,7 +496,7 @@ def test_person_override_disallows_concurrent_merge_different_order(people, team
         first_cursor.execute("BEGIN")
         second_cursor.execute("BEGIN")
 
-        can_lock_event = Event()
+        can_proceed_event = Event()
         done_t1_event = Event()
         done_t2_event = Event()
         t1 = Thread(
@@ -521,7 +519,7 @@ def test_person_override_disallows_concurrent_merge_different_order(people, team
                 new_override_person.uuid,
                 oldest_event,
             ),
-            kwargs={"can_lock_event": can_lock_event, "done_event": done_t2_event},
+            kwargs={"can_proceed_event": can_proceed_event, "done_event": done_t2_event},
         )
         t1.start()
         t2.start()
@@ -530,7 +528,7 @@ def test_person_override_disallows_concurrent_merge_different_order(people, team
         done_t1_event.wait(10)
         first_cursor.execute("COMMIT")
 
-        can_lock_event.set()
+        can_proceed_event.set()
         done_t2_event.wait(10)
         second_cursor.execute("COMMIT")
 
