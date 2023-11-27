@@ -7,7 +7,7 @@ import { createHub } from '../../../src/utils/db/hub'
 import { PostgresUse } from '../../../src/utils/db/postgres'
 import { defaultRetryConfig } from '../../../src/utils/retries'
 import { UUIDT } from '../../../src/utils/utils'
-import { PersonOverrideWorker } from '../../../src/worker/ingestion/person-overrides'
+import { DeferredPersonOverrideWorker } from '../../../src/worker/ingestion/person-overrides'
 import { ageInMonthsLowCardinality, PersonState } from '../../../src/worker/ingestion/person-state'
 import { delayUntilEventIngested } from '../../helpers/clickhouse'
 import { createOrganization, createTeam, fetchPostgresPersons, insertRow } from '../../helpers/sql'
@@ -1562,7 +1562,7 @@ describe('PersonState.update()', () => {
                 // verify Postgres person_id overrides
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
+                    await new DeferredPersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     const overrides = await fetchPersonIdOverrides()
                     expect(overrides).toEqual([[second.uuid, first.uuid]])
@@ -1995,7 +1995,7 @@ describe('PersonState.update()', () => {
 
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
+                    await new DeferredPersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     // verify Postgres person_id overrides
                     const overrides = await fetchPersonIdOverrides()
@@ -2085,7 +2085,7 @@ describe('PersonState.update()', () => {
 
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
+                    await new DeferredPersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     // verify Postgres person_id overrides
                     const overrides = await fetchPersonIdOverrides()

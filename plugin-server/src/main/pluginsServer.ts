@@ -21,6 +21,7 @@ import { status } from '../utils/status'
 import { delay } from '../utils/utils'
 import { AppMetrics } from '../worker/ingestion/app-metrics'
 import { OrganizationManager } from '../worker/ingestion/organization-manager'
+import { DeferredPersonOverrideWorker } from '../worker/ingestion/person-overrides'
 import { TeamManager } from '../worker/ingestion/team-manager'
 import Piscina, { makePiscina as defaultMakePiscina } from '../worker/piscina'
 import { GraphileWorker } from './graphile-worker/graphile-worker'
@@ -95,6 +96,9 @@ export async function startPluginsServer(
     let onEventHandlerConsumer: KafkaJSIngestionConsumer | undefined
     let stopWebhooksHandlerConsumer: () => Promise<void> | undefined
 
+    // TODO: Where should this go???
+    let personOverrideWorker: DeferredPersonOverrideWorker | undefined
+
     // Kafka consumer. Handles events that we couldn't find an existing person
     // to associate. The buffer handles delaying the ingestion of these events
     // (default 60 seconds) to allow for the person to be created in the
@@ -138,6 +142,7 @@ export async function startPluginsServer(
             analyticsEventsIngestionHistoricalConsumer?.stop(),
             onEventHandlerConsumer?.stop(),
             stopWebhooksHandlerConsumer?.(),
+            personOverrideWorker?.stop(), // TODO: right spot?
             bufferConsumer?.disconnect(),
             jobsConsumer?.disconnect(),
             stopSessionRecordingBlobConsumer?.(),
@@ -434,8 +439,15 @@ export async function startPluginsServer(
         }
 
         if (capabilities.personOverrides) {
-            throw new Error('not implemented')
-            // TODO: Health checks
+            // XXX: This initialization pattern seems very kludgey, but copy/pasted from above
+            const statsd = hub?.statsd ?? createStatsdClient(serverConfig, null)
+            const postgres = hub?.postgres ?? new PostgresRouter(serverConfig, statsd)
+            const kafkaProducer = hub?.kafkaProducer ?? (await createKafkaProducerWrapper(serverConfig))
+
+            const personOverrideWorker = new DeferredPersonOverrideWorker(postgres, kafkaProducer)
+            personOverrideWorker.start() // TODO: add check interval setting
+
+            // TODO: also going to want health checks here
         }
 
         if (capabilities.http) {

@@ -195,15 +195,57 @@ class PersonOverrideWriter {
     }
 }
 
-export class PersonOverrideWorker {
+export class DeferredPersonOverrideWorker {
     private writer: PersonOverrideWriter
+    private stopping = false // TODO: all this lifecycle stuff needs a lot more thought
 
     constructor(private postgres: PostgresRouter, kafkaProducer: KafkaProducerWrapper) {
         this.writer = new PersonOverrideWriter(postgres, kafkaProducer)
     }
 
+    public start(batchPollInterval = 5_000): void {
+        if (this.stopping) {
+            throw new Error() // todo: idiomatic error
+        }
+
+        // TODO: ensure exclusive access w/ advisory lock before entering run loop
+
+        const runUntilStop = async () => {
+            if (this.stopping) {
+                return
+            }
+
+            // TODO: what to do if this errors? probably throw out of a promise
+            // returned by this fn, maybe after a retry?
+            await this.handleBatch()
+
+            status.debug(' ', `Waiting for ${batchPollInterval / 1000}s...`)
+            setTimeout(runUntilStop, batchPollInterval)
+        }
+
+        setTimeout(runUntilStop, 0)
+    }
+
+    /* eslint-disable @typescript-eslint/require-await -- wip */
+
+    public async stop(): Promise<void> {
+        this.stopping = true
+        // wait for loop to terminate
+        throw new Error('not implemented')
+    }
+
+    /* eslint-enable */
+
     public async handleBatch(): Promise<void> {
-        // TODO: need to ensure we have exclusive access on the table
+        if (this.stopping) {
+            return
+        }
+
+        // TODO: metrics
+
+        status.debug(' ', 'Checking for overrides')
+
+        // TODO: want to check that have exclusive access on the table in case connection reset
         await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'handleNextPersonOverride', async (tx) => {
             // TODO: probably would make sense to set a limit here
             const rows = (
@@ -214,6 +256,7 @@ export class PersonOverrideWorker {
                     'handleNextPersonOverride'
                 )
             ).rows
+            status.debug(' ', `Processing ${rows.length} overrides...`)
             const records = rows.map((row) => [
                 row.id,
                 {
