@@ -433,6 +433,11 @@ export async function startPluginsServer(
             }
         }
 
+        if (capabilities.personOverrides) {
+            throw new Error('not implemented')
+            // TODO: Health checks
+        }
+
         if (capabilities.http) {
             httpServer = createHttpServer(serverConfig.HTTP_SERVER_PORT, healthChecks, analyticsEventsIngestionConsumer)
         }
