@@ -136,6 +136,7 @@ export function getDefaultConfig(): PluginsServerConfig {
         DROP_EVENTS_BY_TOKEN_DISTINCT_ID: '',
         DROP_EVENTS_BY_TOKEN: '',
         POE_EMBRACE_JOIN_FOR_TEAMS: '',
+        POE_DEFERRED_WRITES_ENABLED: false,
         RELOAD_PLUGIN_JITTER_MAX_MS: 60000,
 
         STARTUP_PROFILE_DURATION_SECONDS: 300, // 5 minutes

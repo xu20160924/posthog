@@ -6,6 +6,7 @@ import { DateTime } from 'luxon'
 import { Counter } from 'prom-client'
 import { KafkaProducerWrapper } from 'utils/db/kafka-producer-wrapper'
 
+import { defaultConfig } from '../../config/config'
 import { KAFKA_PERSON_OVERRIDE } from '../../config/kafka-topics'
 import { Person, PropertyUpdateOperation, TimestampFormat } from '../../types'
 import { DB } from '../../utils/db/db'
@@ -124,7 +125,9 @@ export class PersonState {
 
         // For persons on events embrace the join gradual roll-out, remove after fully rolled out
         this.poEEmbraceJoin = poEEmbraceJoin
-        this.overrideWriter = new PersonOverrideWriter(db.postgres)
+        this.overrideWriter = defaultConfig.POE_DEFERRED_WRITES_ENABLED
+            ? new DeferredPersonOverrideWriter(db.postgres)
+            : new PersonOverrideWriter(db.postgres)
     }
 
     async update(): Promise<Person> {
@@ -722,7 +725,7 @@ class PersonOverrideWriter {
     }
 }
 
-class DeferredPersonOverrideWriter {
+export class DeferredPersonOverrideWriter {
     constructor(private postgres: PostgresRouter) {}
 
     public async addPersonOverride(tx: TransactionClient, mergeOperation: MergeOperation): Promise<ProducerRecord[]> {

@@ -18,9 +18,11 @@ import { captureEventLoopMetrics } from '../utils/metrics'
 import { cancelAllScheduledJobs } from '../utils/node-schedule'
 import { PubSub } from '../utils/pubsub'
 import { status } from '../utils/status'
+import { PeriodicTaskRunner } from '../utils/tasks'
 import { delay } from '../utils/utils'
 import { AppMetrics } from '../worker/ingestion/app-metrics'
 import { OrganizationManager } from '../worker/ingestion/organization-manager'
+import { DeferredPersonOverrideWriter } from '../worker/ingestion/person-state'
 import { TeamManager } from '../worker/ingestion/team-manager'
 import Piscina, { makePiscina as defaultMakePiscina } from '../worker/piscina'
 import { GraphileWorker } from './graphile-worker/graphile-worker'
@@ -104,6 +106,8 @@ export async function startPluginsServer(
     let jobsConsumer: Consumer | undefined
     let schedulerTasksConsumer: Consumer | undefined
 
+    let personOverridesWorker: PeriodicTaskRunner | undefined
+
     let httpServer: Server | undefined // healthcheck server
 
     let graphileWorker: GraphileWorker | undefined
@@ -142,6 +146,7 @@ export async function startPluginsServer(
             jobsConsumer?.disconnect(),
             stopSessionRecordingBlobConsumer?.(),
             schedulerTasksConsumer?.disconnect(),
+            personOverridesWorker?.stop(),
         ])
 
         if (piscina) {
@@ -431,6 +436,17 @@ export async function startPluginsServer(
                 shutdownOnConsumerExit(batchConsumer)
                 healthChecks['session-recordings-blob'] = () => ingester.isHealthy() ?? false
             }
+        }
+
+        if (capabilities.personOverrides) {
+            // TODO: Copy/pasted from above -- figure out if there is a nicer pattern here?
+            const statsd = hub?.statsd ?? createStatsdClient(serverConfig, null)
+            const postgres = hub?.postgres ?? new PostgresRouter(serverConfig, statsd)
+            const kafkaProducer = hub?.kafkaProducer ?? (await createKafkaProducerWrapper(serverConfig))
+            personOverridesWorker = new PeriodicTaskRunner(async () => {
+                await new DeferredPersonOverrideWriter(postgres).processPendingOverrides(kafkaProducer)
+            })
+            healthChecks['person-overrides'] = () => personOverridesWorker!.isHealthy()
         }
 
         if (capabilities.http) {
