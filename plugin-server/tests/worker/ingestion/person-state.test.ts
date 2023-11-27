@@ -1562,7 +1562,7 @@ describe('PersonState.update()', () => {
                 // verify Postgres person_id overrides
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.db).handleBatch()
+                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     const overrides = await fetchPersonIdOverrides()
                     expect(overrides).toEqual([[second.uuid, first.uuid]])
@@ -1995,7 +1995,7 @@ describe('PersonState.update()', () => {
 
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.db).handleBatch()
+                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     // verify Postgres person_id overrides
                     const overrides = await fetchPersonIdOverrides()
@@ -2085,7 +2085,7 @@ describe('PersonState.update()', () => {
 
                 if (poEEmbraceJoin) {
                     // run the override worker to settle all pending overrides
-                    await new PersonOverrideWorker(hub.db).handleBatch()
+                    await new PersonOverrideWorker(hub.postgres, hub.kafkaProducer).handleBatch()
 
                     // verify Postgres person_id overrides
                     const overrides = await fetchPersonIdOverrides()

@@ -1,9 +1,9 @@
 import { DateTime } from 'luxon'
+import { KafkaProducerWrapper } from 'utils/db/kafka-producer-wrapper'
 
 import { KAFKA_PERSON_OVERRIDE } from '../../config/kafka-topics'
 import { Person, TimestampFormat } from '../../types'
-import { DB } from '../../utils/db/db'
-import { PostgresUse, TransactionClient } from '../../utils/db/postgres'
+import { PostgresRouter, PostgresUse, TransactionClient } from '../../utils/db/postgres'
 import { status } from '../../utils/status'
 import { castTimestampOrNow } from '../../utils/utils'
 import { SQL } from './person-state'
@@ -16,7 +16,7 @@ type PersonOverride = {
 }
 
 export class DeferredPersonOverrideWriter {
-    constructor(private db: DB) {}
+    constructor(private postgres: PostgresRouter) {}
 
     public async addPersonOverride(
         tx: TransactionClient,
@@ -33,7 +33,7 @@ export class DeferredPersonOverrideWriter {
         }
         // TODO: cheating for now to see what happens in tests, this should write to the new table
         // TODO: no idea if i'm using this client correctly, need to be careful here
-        await this.db.postgres.query(
+        await this.postgres.query(
             tx,
             SQL`
             INSERT INTO posthog_pendingpersonoverrides (
@@ -54,7 +54,7 @@ export class DeferredPersonOverrideWriter {
 }
 
 class PersonOverrideWriter {
-    constructor(private db: DB) {}
+    constructor(private postgres: PostgresRouter, private kafkaProducer: KafkaProducerWrapper) {}
 
     public async addPersonOverride(tx: TransactionClient, record: PersonOverride): Promise<void> {
         const mergedAt = DateTime.now()
@@ -72,7 +72,7 @@ class PersonOverrideWriter {
             record.overridePersonUuid
         )
 
-        await this.db.postgres.query(
+        await this.postgres.query(
             tx,
             SQL`
                 INSERT INTO posthog_personoverride (
@@ -95,7 +95,7 @@ class PersonOverrideWriter {
 
         // The follow-up JOIN is required as ClickHouse requires UUIDs, so we need to fetch the UUIDs
         // of the IDs we updated from the mapping table.
-        const { rows: transitiveUpdates } = await this.db.postgres.query(
+        const { rows: transitiveUpdates } = await this.postgres.query(
             tx,
             SQL`
                 WITH updated_ids AS (
@@ -127,7 +127,7 @@ class PersonOverrideWriter {
 
         status.debug('🔁', 'person_overrides_updated', { transitiveUpdates })
 
-        await this.db.kafkaProducer.queueMessage({
+        await this.kafkaProducer.queueMessage({
             topic: KAFKA_PERSON_OVERRIDE,
             messages: [
                 {
@@ -167,7 +167,7 @@ class PersonOverrideWriter {
         // as we map int ids to UUIDs (the latter not supported in exclusion contraints).
         const {
             rows: [{ id }],
-        } = await this.db.postgres.query(
+        } = await this.postgres.query(
             tx,
             `WITH insert_id AS (
                     INSERT INTO posthog_personoverridemapping(
@@ -198,16 +198,16 @@ class PersonOverrideWriter {
 export class PersonOverrideWorker {
     private writer: PersonOverrideWriter
 
-    constructor(private db: DB) {
-        this.writer = new PersonOverrideWriter(db)
+    constructor(private postgres: PostgresRouter, kafkaProducer: KafkaProducerWrapper) {
+        this.writer = new PersonOverrideWriter(postgres, kafkaProducer)
     }
 
     public async handleBatch(): Promise<void> {
         // TODO: need to ensure we have exclusive access on the table
-        await this.db.postgres.transaction(PostgresUse.COMMON_WRITE, 'handleNextPersonOverride', async (tx) => {
+        await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'handleNextPersonOverride', async (tx) => {
             // TODO: probably would make sense to set a limit here
             const rows = (
-                await this.db.postgres.query(
+                await this.postgres.query(
                     tx,
                     `SELECT * FROM posthog_pendingpersonoverrides ORDER BY id`,
                     undefined,
@@ -225,7 +225,7 @@ export class PersonOverrideWorker {
             ]) as [id: number, override: PersonOverride][]
             const results = records.map(async ([id, record]) => {
                 await this.writer.addPersonOverride(tx, record).then(async () => {
-                    await this.db.postgres.query(
+                    await this.postgres.query(
                         tx,
                         SQL`DELETE FROM posthog_pendingpersonoverrides WHERE id = ${id}`,
                         undefined,

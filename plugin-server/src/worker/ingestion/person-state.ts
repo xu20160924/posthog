@@ -514,7 +514,7 @@ export class PersonState {
                 )
 
                 if (this.poEEmbraceJoin) {
-                    await new DeferredPersonOverrideWriter(this.db).addPersonOverride(
+                    await new DeferredPersonOverrideWriter(this.db.postgres).addPersonOverride(
                         tx,
                         this.teamId,
                         otherPerson,
