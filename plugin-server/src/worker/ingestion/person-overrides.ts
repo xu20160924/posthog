@@ -194,11 +194,11 @@ class PersonOverrideWriter {
     }
 }
 
-export class Worker {
-    private result: Promise<void> | undefined
+export class PeriodicTaskRunner {
+    private result: Promise<void>
     private abortController: AbortController
 
-    constructor(private fn: () => Promise<void> | void, intervalMs = 1000) {
+    constructor(task: () => Promise<void> | void, intervalMs = 1000) {
         this.abortController = new AbortController()
 
         const abortRequested = new Promise((resolve) => {
@@ -206,9 +206,9 @@ export class Worker {
         })
 
         this.result = new Promise(async (resolve) => {
-            // TODO: error handling and/or health checks
             while (!this.abortController.signal.aborted) {
-                await this.fn()
+                // TODO: Set a timer and warn if this has gone over the interval
+                await task()
                 await Promise.race([sleep(intervalMs), abortRequested])
             }
             resolve()
@@ -221,7 +221,10 @@ export class Worker {
     }
 }
 
-export function createPersonOverrideWorker(postgres: PostgresRouter, kafkaProducer: KafkaProducerWrapper): Worker {
+export function createPersonOverrideWorker(
+    postgres: PostgresRouter,
+    kafkaProducer: KafkaProducerWrapper
+): PeriodicTaskRunner {
     const writer = new PersonOverrideWriter(postgres, kafkaProducer)
 
     const handleBatch = async () => {
@@ -273,5 +276,5 @@ export function createPersonOverrideWorker(postgres: PostgresRouter, kafkaProduc
         })
     }
 
-    return new Worker(handleBatch)
+    return new PeriodicTaskRunner(handleBatch)
 }
