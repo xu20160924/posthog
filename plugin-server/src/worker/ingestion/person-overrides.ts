@@ -31,7 +31,6 @@ export class DeferredPersonOverrideWriter {
             overridePersonUuid: overridePerson.uuid,
             oldestEvent: overridePerson.created_at,
         }
-        // TODO: cheating for now to see what happens in tests, this should write to the new table
         // TODO: no idea if i'm using this client correctly, need to be careful here
         await this.postgres.query(
             tx,
