@@ -97,7 +97,7 @@ export async function startPluginsServer(
     let stopWebhooksHandlerConsumer: () => Promise<void> | undefined
 
     // TODO: Where should this go???
-    let personOverrideWorker: PeriodicTaskRunner | undefined
+    let personOverrideTaskRunner: PeriodicTaskRunner | undefined
 
     // Kafka consumer. Handles events that we couldn't find an existing person
     // to associate. The buffer handles delaying the ingestion of these events
@@ -142,7 +142,7 @@ export async function startPluginsServer(
             analyticsEventsIngestionHistoricalConsumer?.stop(),
             onEventHandlerConsumer?.stop(),
             stopWebhooksHandlerConsumer?.(),
-            personOverrideWorker?.stop(), // TODO: right spot?
+            personOverrideTaskRunner?.stop(), // TODO: right spot?
             bufferConsumer?.disconnect(),
             jobsConsumer?.disconnect(),
             stopSessionRecordingBlobConsumer?.(),
@@ -445,9 +445,8 @@ export async function startPluginsServer(
             const kafkaProducer = hub?.kafkaProducer ?? (await createKafkaProducerWrapper(serverConfig))
 
             // TODO: add check interval setting
-            personOverrideWorker = createPersonOverrideWorker(postgres, kafkaProducer)
-
-            // TODO: also going to want health checks here
+            personOverrideTaskRunner = createPersonOverrideWorker(postgres, kafkaProducer)
+            healthChecks['person-overrides'] = () => personOverrideTaskRunner!.isHealthy()
         }
 
         if (capabilities.http) {
