@@ -21,7 +21,7 @@ import { status } from '../utils/status'
 import { delay } from '../utils/utils'
 import { AppMetrics } from '../worker/ingestion/app-metrics'
 import { OrganizationManager } from '../worker/ingestion/organization-manager'
-import { createPersonOverrideWorker } from '../worker/ingestion/person-overrides'
+import { createPersonOverrideWorker, Worker as PersonOverrideWorker } from '../worker/ingestion/person-overrides'
 import { TeamManager } from '../worker/ingestion/team-manager'
 import Piscina, { makePiscina as defaultMakePiscina } from '../worker/piscina'
 import { GraphileWorker } from './graphile-worker/graphile-worker'
@@ -97,7 +97,7 @@ export async function startPluginsServer(
     let stopWebhooksHandlerConsumer: () => Promise<void> | undefined
 
     // TODO: Where should this go???
-    let personOverrideWorker: DeferredPersonOverrideWorker | undefined
+    let personOverrideWorker: PersonOverrideWorker | undefined
 
     // Kafka consumer. Handles events that we couldn't find an existing person
     // to associate. The buffer handles delaying the ingestion of these events
@@ -444,8 +444,8 @@ export async function startPluginsServer(
             const postgres = hub?.postgres ?? new PostgresRouter(serverConfig, statsd)
             const kafkaProducer = hub?.kafkaProducer ?? (await createKafkaProducerWrapper(serverConfig))
 
-            const personOverrideWorker = createPersonOverrideWorker(postgres, kafkaProducer)
-            personOverrideWorker.start() // TODO: add check interval setting
+            // TODO: add check interval setting
+            personOverrideWorker = createPersonOverrideWorker(postgres, kafkaProducer)
 
             // TODO: also going to want health checks here
         }

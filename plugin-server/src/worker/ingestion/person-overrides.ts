@@ -194,29 +194,30 @@ class PersonOverrideWriter {
     }
 }
 
-class Worker {
+export class Worker {
     private result: Promise<void> | undefined
-    private stopRequested = false
+    private abortController: AbortController
 
-    constructor(private fn: () => Promise<void> | void) {}
+    constructor(private fn: () => Promise<void> | void, intervalMs = 1000) {
+        this.abortController = new AbortController()
 
-    public start(waitDuration = 1000) {
-        if (this.result !== undefined) {
-            throw new Error('invalid operation: already started')
-        }
+        const abortRequested = new Promise((resolve) => {
+            this.abortController.signal.addEventListener('abort', resolve, { once: true })
+        })
 
-        this.result = new Promise(async () => {
+        this.result = new Promise(async (resolve) => {
             // TODO: error handling and/or health checks
-            while (!this.stopRequested) {
+            while (!this.abortController.signal.aborted) {
                 await this.fn()
-                await sleep(waitDuration)
+                await Promise.race([sleep(intervalMs), abortRequested])
             }
+            resolve()
         })
     }
 
     public async stop() {
-        this.stopRequested = true
-        await this.result
+        this.abortController.abort()
+        await this.result // TODO: not sure it's desirable that this can throw
     }
 }
 
