@@ -21,7 +21,7 @@ import { status } from '../utils/status'
 import { delay } from '../utils/utils'
 import { AppMetrics } from '../worker/ingestion/app-metrics'
 import { OrganizationManager } from '../worker/ingestion/organization-manager'
-import { DeferredPersonOverrideWorker } from '../worker/ingestion/person-overrides'
+import { createPersonOverrideWorker } from '../worker/ingestion/person-overrides'
 import { TeamManager } from '../worker/ingestion/team-manager'
 import Piscina, { makePiscina as defaultMakePiscina } from '../worker/piscina'
 import { GraphileWorker } from './graphile-worker/graphile-worker'
@@ -444,7 +444,7 @@ export async function startPluginsServer(
             const postgres = hub?.postgres ?? new PostgresRouter(serverConfig, statsd)
             const kafkaProducer = hub?.kafkaProducer ?? (await createKafkaProducerWrapper(serverConfig))
 
-            const personOverrideWorker = new DeferredPersonOverrideWorker(postgres, kafkaProducer)
+            const personOverrideWorker = createPersonOverrideWorker(postgres, kafkaProducer)
             personOverrideWorker.start() // TODO: add check interval setting
 
             // TODO: also going to want health checks here

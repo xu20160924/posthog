@@ -5,7 +5,7 @@ import { KAFKA_PERSON_OVERRIDE } from '../../config/kafka-topics'
 import { Person, TimestampFormat } from '../../types'
 import { PostgresRouter, PostgresUse, TransactionClient } from '../../utils/db/postgres'
 import { status } from '../../utils/status'
-import { castTimestampOrNow } from '../../utils/utils'
+import { castTimestampOrNow, sleep } from '../../utils/utils'
 import { SQL } from './person-state'
 
 type PersonOverride = {
@@ -195,68 +195,58 @@ class PersonOverrideWriter {
     }
 }
 
-export class DeferredPersonOverrideWorker {
-    private writer: PersonOverrideWriter
-    private stopping = false // TODO: all this lifecycle stuff needs a lot more thought
+class Worker {
+    private result: Promise<void> | undefined
+    private stopRequested = false
 
-    constructor(private postgres: PostgresRouter, kafkaProducer: KafkaProducerWrapper) {
-        this.writer = new PersonOverrideWriter(postgres, kafkaProducer)
-    }
+    constructor(private fn: () => Promise<void> | void) {}
 
-    public start(batchPollInterval = 5_000): void {
-        if (this.stopping) {
-            throw new Error() // todo: idiomatic error
+    public start(waitDuration = 1000) {
+        if (this.result !== undefined) {
+            throw new Error('invalid operation: already started')
         }
 
-        // TODO: ensure exclusive access w/ advisory lock before entering run loop
-
-        const runUntilStop = async () => {
-            if (this.stopping) {
-                return
+        this.result = new Promise(async () => {
+            // TODO: error handling and/or health checks
+            while (!this.stopRequested) {
+                await this.fn()
+                await sleep(waitDuration)
             }
-
-            // TODO: what to do if this errors? probably throw out of a promise
-            // returned by this fn, maybe after a retry?
-            await this.handleBatch()
-
-            status.debug(' ', `Waiting for ${batchPollInterval / 1000}s...`)
-            setTimeout(runUntilStop, batchPollInterval)
-        }
-
-        setTimeout(runUntilStop, 0)
+        })
     }
 
-    /* eslint-disable @typescript-eslint/require-await -- wip */
-
-    public async stop(): Promise<void> {
-        this.stopping = true
-        // wait for loop to terminate
-        throw new Error('not implemented')
+    public async stop() {
+        this.stopRequested = true
+        await this.result
     }
+}
 
-    /* eslint-enable */
+export function createPersonOverrideWorker(postgres: PostgresRouter, kafkaProducer: KafkaProducerWrapper): Worker {
+    const writer = new PersonOverrideWriter(postgres, kafkaProducer)
 
-    public async handleBatch(): Promise<void> {
-        if (this.stopping) {
-            return
-        }
-
+    const handleBatch = async () => {
         // TODO: metrics
+        // TODO: clean up logging
+        status.debug('👥', 'Checking for person overrides...')
 
-        status.debug(' ', 'Checking for overrides')
+        // TODO: want to check that have exclusive access here using advisory
+        // lock to be safe; going to need to make sure this works nicely with
+        // hobby deploys since we won't necessarily be able to control the
+        // concurrency there
 
-        // TODO: want to check that have exclusive access on the table in case connection reset
-        await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'handleNextPersonOverride', async (tx) => {
-            // TODO: probably would make sense to set a limit here
+        await postgres.transaction(PostgresUse.COMMON_WRITE, 'handleNextPersonOverride', async (tx) => {
+            // TODO: probably would make sense to set a limit here just to ensure we
+            // don't take too big of bites
             const rows = (
-                await this.postgres.query(
+                await postgres.query(
                     tx,
                     `SELECT * FROM posthog_pendingpersonoverrides ORDER BY id`,
                     undefined,
                     'handleNextPersonOverride'
                 )
             ).rows
-            status.debug(' ', `Processing ${rows.length} overrides...`)
+
+            status.debug('👥', `Processing ${rows.length} person overrides...`)
             const records = rows.map((row) => [
                 row.id,
                 {
@@ -264,11 +254,12 @@ export class DeferredPersonOverrideWorker {
                     oldPersonUuid: row.old_person_id,
                     overridePersonUuid: row.override_person_id,
                     oldestEvent: row.oldest_event,
-                }, // TODO: need better validation for the types in this object
+                }, // TODO: need better type validation for this row object
             ]) as [id: number, override: PersonOverride][]
+
             const results = records.map(async ([id, record]) => {
-                await this.writer.addPersonOverride(tx, record).then(async () => {
-                    await this.postgres.query(
+                await writer.addPersonOverride(tx, record).then(async () => {
+                    await postgres.query(
                         tx,
                         SQL`DELETE FROM posthog_pendingpersonoverrides WHERE id = ${id}`,
                         undefined,
@@ -276,7 +267,11 @@ export class DeferredPersonOverrideWorker {
                     )
                 })
             })
+
             await Promise.all(results)
+            ;(results.length > 0 ? status.info : status.debug)('👥', `Processed ${results.length} person overrides.`)
         })
     }
+
+    return new Worker(handleBatch)
 }
