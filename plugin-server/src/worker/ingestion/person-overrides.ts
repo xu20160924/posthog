@@ -199,7 +199,12 @@ export class PeriodicTaskRunner {
     private abortController: AbortController
     private consecutiveErrors = 0
 
-    constructor(task: () => Promise<void> | void, intervalMs = 1000, private healthCheckFailureThreshold: number = 1) {
+    constructor(
+        task: () => Promise<void> | void,
+        intervalMs = 1000,
+        minimumWaitMs = 1000,
+        private healthCheckFailureThreshold: number = 1
+    ) {
         this.abortController = new AbortController()
 
         const abortRequested = new Promise((resolve) => {
@@ -209,6 +214,7 @@ export class PeriodicTaskRunner {
         this.result = new Promise(async (resolve) => {
             while (!this.abortController.signal.aborted) {
                 // TODO: Set a timer and warn if this has gone over the interval
+                const startTimeMs = +Date.now()
                 try {
                     await task()
                     this.consecutiveErrors = 0
@@ -223,7 +229,8 @@ export class PeriodicTaskRunner {
                         task
                     )
                 }
-                await Promise.race([sleep(intervalMs), abortRequested])
+                const waitTimeMs = Math.max(intervalMs - startTimeMs, minimumWaitMs)
+                await Promise.race([sleep(waitTimeMs), abortRequested])
             }
             resolve()
         })
