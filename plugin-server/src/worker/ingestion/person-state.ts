@@ -581,19 +581,34 @@ export class PersonOverrideWriter {
 
         await this.postgres.query(
             tx,
-            SQL`
+            `
                 INSERT INTO posthog_personoverride (
                     team_id,
                     old_person_id,
                     override_person_id,
                     oldest_event,
                     version
-                ) VALUES (
-                    ${overrideDetails.team_id},
-                    ${oldPersonMappingId},
-                    ${overridePersonMappingId},
-                    ${overrideDetails.oldest_event},
-                    0
+                ) 
+                SELECT 
+                    original.team_id,
+                    original.old_person_id,
+                    original.override_person_id,
+                    original.oldest_event,
+                    original.version
+                FROM (
+                    VALUES (
+                        ${overrideDetails.team_id},
+                        ${oldPersonMappingId},
+                        ${overridePersonMappingId},
+                        TIMESTAMP WITH TIME ZONE '${overrideDetails.oldest_event}',  -- XXX: bad, don't do
+                        0
+                    )
+                ) as original (
+                    team_id,
+                    old_person_id,
+                    override_person_id,
+                    oldest_event,
+                    version
                 )
             `,
             undefined,
