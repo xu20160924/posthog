@@ -2096,6 +2096,59 @@ describe('PersonState.update()', () => {
     })
 })
 
+describe('PersonOverrideWriter', () => {
+    let hub: Hub
+    let closeHub: () => Promise<void>
+
+    // not always used, but used more often then not
+    let organizationId: string
+    let teamId: number
+
+    let writer: PersonOverrideWriter
+
+    beforeAll(async () => {
+        ;[hub, closeHub] = await createHub({})
+        organizationId = await createOrganization(hub.db.postgres)
+        writer = new PersonOverrideWriter(hub.db.postgres)
+    })
+
+    beforeEach(async () => {
+        teamId = await createTeam(hub.db.postgres, organizationId)
+    })
+
+    afterAll(async () => {
+        await closeHub()
+    })
+
+    it('resolves overrides that arrive out-of-order into the correct end state', async () => {
+        const { postgres } = hub.db
+
+        // old person id, override person id (i.e., .[0] into .[1])
+        const overrides = [
+            ['cccccccc-cccc-cccc-cccc-cccccccccccc', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'],
+            ['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+        ]
+
+        for (const [old_person_id, override_person_id] of overrides.reverse()) {
+            await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
+                await writer.addPersonOverride(tx, {
+                    team_id: teamId,
+                    old_person_id: old_person_id,
+                    override_person_id: override_person_id,
+                    oldest_event: DateTime.fromMillis(0),
+                })
+            })
+        }
+
+        expect(await fetchPostgresPersonIdOverrides(hub, teamId)).toEqual(
+            [
+                ['cccccccc-cccc-cccc-cccc-cccccccccccc', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+                ['bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+            ].sort()
+        )
+    })
+})
+
 describe('DeferredPersonOverrideWriter', () => {
     let hub: Hub
     let closeHub: () => Promise<void>
