@@ -579,7 +579,12 @@ export class PersonOverrideWriter {
             overrideDetails.override_person_id
         )
 
-        await this.postgres.query(
+        // If this override arrived out of order for some reason, it's possible
+        // that the "override person" (who we're merging into) has already been
+        // merged into somebody else (i.e. is the "old person" in another
+        // override.) If that's the case, we just need to update our provisional
+        // override values to reflect that person instead of ours.
+        const { rowCount } = await this.postgres.query(
             tx,
             `
                 INSERT INTO posthog_personoverride (
@@ -590,11 +595,14 @@ export class PersonOverrideWriter {
                     version
                 ) 
                 SELECT 
-                    original.team_id,
-                    original.old_person_id,
-                    original.override_person_id,
-                    original.oldest_event,
-                    original.version
+                    provisional.team_id,
+                    provisional.old_person_id,
+                    COALESCE(
+                        existing.override_person_id,
+                        provisional.override_person_id
+                    ) as override_person_id,
+                    provisional.oldest_event,
+                    provisional.version
                 FROM (
                     VALUES (
                         ${overrideDetails.team_id},
@@ -603,17 +611,27 @@ export class PersonOverrideWriter {
                         TIMESTAMP WITH TIME ZONE '${overrideDetails.oldest_event}',  -- XXX: bad, don't do
                         0
                     )
-                ) as original (
+                ) as provisional (
                     team_id,
                     old_person_id,
                     override_person_id,
                     oldest_event,
                     version
                 )
+                LEFT OUTER JOIN posthog_personoverride existing ON
+                    provisional.team_id = existing.team_id AND
+                    provisional.override_person_id = existing.old_person_id
             `,
             undefined,
             'personOverride'
         )
+
+        if (rowCount != 1) {
+            // Be extra cautious here due to the use of a join in the insert
+            // clause -- if we tried to insert either zero or multiple rows,
+            // something very unexpected happened.
+            throw new Error(`expected to 1 override to be inserted, but attempted to insert ${rowCount}`)
+        }
 
         // The follow-up JOIN is required as ClickHouse requires UUIDs, so we need to fetch the UUIDs
         // of the IDs we updated from the mapping table.
