@@ -2134,12 +2134,13 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
         await closeHub()
     })
 
-    it('handles direct overrides', async () => {
+    it('handles direct merges', async () => {
         const { postgres } = hub.db
 
         const defaults = {
             team_id: teamId,
             oldest_event: DateTime.fromMillis(0),
+            distinct_id: null,
         }
 
         const override = {
@@ -2154,12 +2155,13 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
         expect(await writer.getPersonOverrides(teamId)).toEqual([{ ...defaults, ...override }])
     })
 
-    it('handles transitive overrides', async () => {
+    it('handles transitive merges', async () => {
         const { postgres } = hub.db
 
         const defaults = {
             team_id: teamId,
             oldest_event: DateTime.fromMillis(0),
+            distinct_id: null,
         }
 
         const overrides = [

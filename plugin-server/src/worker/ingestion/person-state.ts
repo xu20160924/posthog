@@ -538,6 +538,7 @@ export class PersonState {
 type PersonOverrideDetails = {
     team_id: number
     old_person_id: string
+    distinct_id: string | null
     override_person_id: string
     oldest_event: DateTime
 }
@@ -549,6 +550,7 @@ function getPersonOverrideDetails(teamId: number, oldPerson: Person, overridePer
     return {
         team_id: teamId,
         old_person_id: oldPerson.uuid,
+        distinct_id: null, // XXX
         override_person_id: overridePerson.uuid,
         oldest_event: overridePerson.created_at,
     }
@@ -748,12 +750,14 @@ export class FlatPersonOverrideWriter {
                 INSERT INTO posthog_flatpersonoverride (
                     team_id,
                     old_person_id,
+                    distinct_id,
                     override_person_id,
                     oldest_event,
                     version
                 ) VALUES (
                     ${overrideDetails.team_id},
                     ${overrideDetails.old_person_id},
+                    ${overrideDetails.distinct_id},
                     ${overrideDetails.override_person_id},
                     ${overrideDetails.oldest_event},
                     0
@@ -784,6 +788,7 @@ export class FlatPersonOverrideWriter {
 
         status.debug('🔁', 'person_overrides_updated', { transitiveUpdates })
 
+        // TODO: Add `override_id` here and to ClickHouse schema.
         const personOverrideMessages: ProducerRecord[] = [
             {
                 topic: KAFKA_PERSON_OVERRIDE,
@@ -822,6 +827,7 @@ export class FlatPersonOverrideWriter {
                 SELECT
                     team_id,
                     old_person_id,
+                    distinct_id,
                     override_person_id,
                     oldest_event
                 FROM posthog_flatpersonoverride
