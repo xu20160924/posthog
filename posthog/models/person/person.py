@@ -209,6 +209,7 @@ class PendingPersonOverride(models.Model):
     id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")
     team_id = models.BigIntegerField()
     old_person_id = models.UUIDField()
+    distinct_id = models.CharField(max_length=400, null=True)
     override_person_id = models.UUIDField()
     oldest_event = models.DateTimeField()
 
@@ -254,21 +255,22 @@ class FlatPersonOverride(models.Model):
     id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")
     team_id = models.BigIntegerField()
     old_person_id = models.UUIDField()
+    distinct_id = models.CharField(max_length=400, null=True)
     override_person_id = models.UUIDField()
     oldest_event = models.DateTimeField()
     version = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=["team_id", "override_person_id"]),
+            models.Index(fields=["team_id", "override_person_id", "distinct_id"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["team_id", "old_person_id"],
+                fields=["team_id", "old_person_id", "distinct_id"],
                 name="flatpersonoverride_unique_old_person_by_team",
             ),
             models.CheckConstraint(
-                check=~Q(old_person_id__exact=F("override_person_id")),
+                check=~Q(old_person_id__exact=F("override_person_id"), distinct_id__isnull=True),
                 name="flatpersonoverride_check_circular_reference",
             ),
         ]
