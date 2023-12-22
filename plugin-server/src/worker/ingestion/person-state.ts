@@ -818,9 +818,7 @@ export class FlatPersonOverrideWriter {
                 WHERE
                     team_id = ${overrideDetails.team_id}
                     AND override_person_id = '${overrideDetails.old_person_id}'
-                    AND distinct_id ${
-                        overrideDetails.distinct_id === null ? 'IS NULL' : `= '${overrideDetails.distinct_id}'`
-                    }
+                    ${overrideDetails.distinct_id !== null ? `AND distinct_id = '${overrideDetails.distinct_id}'` : ''}
                 RETURNING
                     old_person_id,
                     version,
