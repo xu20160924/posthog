@@ -2134,7 +2134,7 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
         await closeHub()
     })
 
-    it('handles direct merges', async () => {
+    it('handles unqualified overrides', async () => {
         const { postgres } = hub.db
 
         const defaults = {
@@ -2155,7 +2155,7 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
         expect(await writer.getPersonOverrides(teamId)).toEqual([{ ...defaults, ...override }])
     })
 
-    it('handles transitive merges', async () => {
+    it('handles transitive unqualified merges', async () => {
         const { postgres } = hub.db
 
         const defaults = {
@@ -2187,6 +2187,67 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
                 overrides.map(({ old_person_id }) => ({
                     old_person_id,
                     override_person_id: overrides.at(-1)!.override_person_id,
+                    ...defaults,
+                }))
+            )
+        )
+    })
+
+    it('handles qualified overrides', async () => {
+        const { postgres } = hub.db
+
+        const defaults = {
+            team_id: teamId,
+            oldest_event: DateTime.fromMillis(0),
+        }
+
+        const override = {
+            old_person_id: new UUIDT().toString(),
+            override_person_id: new UUIDT().toString(),
+            distinct_id: 'a',
+        }
+
+        await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
+            await writer.addPersonOverride(tx, { ...defaults, ...override })
+        })
+
+        expect(await writer.getPersonOverrides(teamId)).toEqual([{ ...defaults, ...override }])
+    })
+
+    it('handles transitive unqualified overrides', async () => {
+        const { postgres } = hub.db
+
+        const defaults = {
+            team_id: teamId,
+            oldest_event: DateTime.fromMillis(0),
+        }
+
+        const overrides = [
+            {
+                old_person_id: new UUIDT().toString(),
+                override_person_id: new UUIDT().toString(),
+                distinct_id: 'a',
+            },
+        ]
+
+        overrides.push({
+            old_person_id: overrides[0].override_person_id,
+            override_person_id: new UUIDT().toString(),
+            distinct_id: 'a',
+        })
+
+        await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
+            for (const override of overrides) {
+                await writer.addPersonOverride(tx, { ...defaults, ...override })
+            }
+        })
+
+        expect(new Set(await writer.getPersonOverrides(teamId))).toEqual(
+            new Set(
+                overrides.map(({ old_person_id }) => ({
+                    old_person_id,
+                    override_person_id: overrides.at(-1)!.override_person_id,
+                    distinct_id: 'a',
                     ...defaults,
                 }))
             )

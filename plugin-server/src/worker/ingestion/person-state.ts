@@ -744,6 +744,8 @@ export class FlatPersonOverrideWriter {
     ): Promise<ProducerRecord[]> {
         const mergedAt = DateTime.now()
 
+        // TODO: This is going to need to support `ON CONFLICT` as qualified
+        // overrides may create cycles!
         await this.postgres.query(
             tx,
             SQL`
@@ -769,14 +771,20 @@ export class FlatPersonOverrideWriter {
 
         const { rows: transitiveUpdates } = await this.postgres.query(
             tx,
-            SQL`
+            // XXX: this query is vulnerable to injection, but is updated here
+            // for demonstrative purposes, do not merge this as-is!
+            `
                 UPDATE
                     posthog_flatpersonoverride
                 SET
-                    override_person_id = ${overrideDetails.override_person_id},
+                    override_person_id = '${overrideDetails.override_person_id}',
                     version = COALESCE(version, 0)::numeric + 1
                 WHERE
-                    team_id = ${overrideDetails.team_id} AND override_person_id = ${overrideDetails.old_person_id}
+                    team_id = ${overrideDetails.team_id}
+                    AND override_person_id = '${overrideDetails.old_person_id}'
+                    AND distinct_id ${
+                        overrideDetails.distinct_id === null ? 'IS NULL' : `= '${overrideDetails.distinct_id}'`
+                    }
                 RETURNING
                     old_person_id,
                     version,
