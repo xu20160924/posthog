@@ -742,43 +742,62 @@ export class FlatPersonOverrideWriter {
         tx: TransactionClient,
         overrideDetails: PersonOverrideDetails
     ): Promise<ProducerRecord[]> {
-        const mergedAt = DateTime.now()
+        // const mergedAt = DateTime.now()
 
-        // XXX: this query is vulnerable to injection, but is updated here
-        // for demonstrative purposes, do not merge this as-is!
-        await this.postgres.query(
-            tx,
-            `
-                INSERT INTO posthog_flatpersonoverride (
-                    team_id,
-                    old_person_id,
-                    distinct_id,
-                    override_person_id,
-                    oldest_event,
-                    version
-                ) VALUES (
-                    ${overrideDetails.team_id},
-                    '${overrideDetails.old_person_id}',
-                    ${overrideDetails.distinct_id === null ? 'null' : `'${overrideDetails.distinct_id}'`},
-                    '${overrideDetails.override_person_id}',
-                    '${overrideDetails.oldest_event}',
-                    0
-                ) ${
-                    overrideDetails.distinct_id !== null
-                        ? `
-                            ON CONFLICT ON CONSTRAINT "flatpersonoverride_unique_old_person_by_team"
-                            DO UPDATE SET
-                                override_person_id = EXCLUDED.override_person_id,
-                                version = posthog_flatpersonoverride.version + 1
-                        `
-                        : ''
-                }
-            `,
-            undefined,
-            'personOverride'
-        )
+        if (overrideDetails.distinct_id === null) {
+            // Merge, e.g. A(*) -> B
+            await this.postgres.query(
+                tx,
+                `
+                    INSERT INTO posthog_flatpersonoverride (
+                        team_id,
+                        old_person_id,
+                        distinct_id,
+                        override_person_id,
+                        oldest_event,
+                        version
+                    ) VALUES (
+                        ${overrideDetails.team_id},
+                        '${overrideDetails.old_person_id}',
+                        null,
+                        '${overrideDetails.override_person_id}',
+                        '${overrideDetails.oldest_event}',
+                        0
+                    )
+                `,
+                undefined,
+                'personOverride'
+            )
+            // TODO: republish transitive updates
+            await this.postgres.query(
+                tx,
+                // XXX: this query is vulnerable to injection, but is updated here
+                // for demonstrative purposes, do not merge this as-is!
+                `
+                    UPDATE
+                        posthog_flatpersonoverride
+                    SET
+                        override_person_id = '${overrideDetails.override_person_id}',
+                        version = COALESCE(version, 0)::numeric + 1
+                    WHERE
+                        team_id = ${overrideDetails.team_id}
+                        AND override_person_id = '${overrideDetails.old_person_id}'
+                    RETURNING
+                        old_person_id,
+                        version,
+                        oldest_event
+                `,
+                undefined,
+                'transitivePersonOverrides'
+            )
+        } else {
+            // Split, e.g. A(a) -> B
 
-        if (overrideDetails.distinct_id !== null) {
+            // We need to ensure that a qualified override record exists for
+            // anyone who previously referenced this old_person_id (with our
+            // without a distinct_id qualifier); if one already exists, we need
+            // to replace the override_person_id with the new one
+
             // TODO: This also needs to be able to support `ON CONFLICT`, see above
             // TODO: This will need to return a value that can be published to Kafka
             await this.postgres.query(
@@ -794,81 +813,96 @@ export class FlatPersonOverrideWriter {
                     )
                     SELECT
                         team_id,
-                        old_person_id,
+                        old_person_id, -- this doesn't ever change
                         ${overrideDetails.distinct_id} as distinct_id,
                         ${overrideDetails.override_person_id} as override_person_id,
-                        oldest_event, -- works as a lower bound
-                        0
-                    FROM posthog_flatpersonoverride fpo
+                        oldest_event, -- works as a lower bound here still
+                        version
+                    FROM posthog_flatpersonoverride AS old
                     WHERE (
-                        team_id = ${overrideDetails.team_id}
-                        AND fpo.override_person_id = ${overrideDetails.old_person_id}
-                        AND fpo.distinct_id IS NULL
+                        -- we need to insert or update a row for any person who has
+                        -- previously used this distinct id, whether they did so
+                        -- explicitly (via a split) or not (via a merge)
+                        old.team_id = ${overrideDetails.team_id}
+                        AND old.override_person_id = ${overrideDetails.old_person_id}
+                        AND (
+                            old.distinct_id IS NULL
+                            OR old.distinct_id = ${overrideDetails.distinct_id}
+                        )
                     )
+                    ON CONFLICT ON CONSTRAINT "flatpersonoverride_unique_old_person_by_team"
+                    DO UPDATE SET
+                        override_person_id = EXCLUDED.override_person_id,
+                        version = posthog_flatpersonoverride.version + 1
                     RETURNING
                         old_person_id,
-                        oldest_event
+                        distinct_id,
+                        oldest_event,
+                        version
                 `,
                 undefined,
                 'personUnqualifiedOverride'
             )
+            await this.postgres.query(
+                tx,
+                SQL`
+                    INSERT INTO posthog_flatpersonoverride (
+                        team_id,
+                        old_person_id,
+                        distinct_id,
+                        override_person_id,
+                        oldest_event,
+                        version
+                    ) VALUES (
+                        ${overrideDetails.team_id},
+                        ${overrideDetails.old_person_id},
+                        ${overrideDetails.distinct_id},
+                        ${overrideDetails.override_person_id},
+                        ${overrideDetails.oldest_event},
+                        0
+                    )
+                    ON CONFLICT ON CONSTRAINT "flatpersonoverride_unique_old_person_by_team"
+                    DO NOTHING -- janky, but we did this in the last query
+                `,
+                undefined,
+                'personOverride'
+            )
         }
 
-        const { rows: transitiveUpdates } = await this.postgres.query(
-            tx,
-            // XXX: this query is vulnerable to injection, but is updated here
-            // for demonstrative purposes, do not merge this as-is!
-            `
-                UPDATE
-                    posthog_flatpersonoverride
-                SET
-                    override_person_id = '${overrideDetails.override_person_id}',
-                    version = COALESCE(version, 0)::numeric + 1
-                WHERE
-                    team_id = ${overrideDetails.team_id}
-                    AND override_person_id = '${overrideDetails.old_person_id}'
-                    ${overrideDetails.distinct_id !== null ? `AND distinct_id = '${overrideDetails.distinct_id}'` : ''}
-                RETURNING
-                    old_person_id,
-                    version,
-                    oldest_event
-            `,
-            undefined,
-            'transitivePersonOverrides'
-        )
+        return []
 
-        status.debug('🔁', 'person_overrides_updated', { transitiveUpdates })
+        // status.debug('🔁', 'person_overrides_updated', { transitiveUpdates })
 
-        // TODO: Add `override_id` here and to ClickHouse schema.
-        const personOverrideMessages: ProducerRecord[] = [
-            {
-                topic: KAFKA_PERSON_OVERRIDE,
-                messages: [
-                    {
-                        value: JSON.stringify({
-                            team_id: overrideDetails.team_id,
-                            old_person_id: overrideDetails.old_person_id,
-                            override_person_id: overrideDetails.override_person_id,
-                            oldest_event: castTimestampOrNow(overrideDetails.oldest_event, TimestampFormat.ClickHouse),
-                            merged_at: castTimestampOrNow(mergedAt, TimestampFormat.ClickHouse),
-                            version: 0,
-                        }),
-                    },
-                    ...transitiveUpdates.map(({ old_person_id, version, oldest_event }) => ({
-                        value: JSON.stringify({
-                            team_id: overrideDetails.team_id,
-                            old_person_id: old_person_id,
-                            override_person_id: overrideDetails.override_person_id,
-                            oldest_event: castTimestampOrNow(oldest_event, TimestampFormat.ClickHouse),
-                            merged_at: castTimestampOrNow(mergedAt, TimestampFormat.ClickHouse),
-                            version: version,
-                        }),
-                    })),
-                ],
-            },
-        ]
+        // // TODO: Add `override_id` here and to ClickHouse schema.
+        // const personOverrideMessages: ProducerRecord[] = [
+        //     {
+        //         topic: KAFKA_PERSON_OVERRIDE,
+        //         messages: [
+        //             {
+        //                 value: JSON.stringify({
+        //                     team_id: overrideDetails.team_id,
+        //                     old_person_id: overrideDetails.old_person_id,
+        //                     override_person_id: overrideDetails.override_person_id,
+        //                     oldest_event: castTimestampOrNow(overrideDetails.oldest_event, TimestampFormat.ClickHouse),
+        //                     merged_at: castTimestampOrNow(mergedAt, TimestampFormat.ClickHouse),
+        //                     version: 0,
+        //                 }),
+        //             },
+        //             ...transitiveUpdates.map(({ old_person_id, version, oldest_event }) => ({
+        //                 value: JSON.stringify({
+        //                     team_id: overrideDetails.team_id,
+        //                     old_person_id: old_person_id,
+        //                     override_person_id: overrideDetails.override_person_id,
+        //                     oldest_event: castTimestampOrNow(oldest_event, TimestampFormat.ClickHouse),
+        //                     merged_at: castTimestampOrNow(mergedAt, TimestampFormat.ClickHouse),
+        //                     version: version,
+        //                 }),
+        //             })),
+        //         ],
+        //     },
+        // ]
 
-        return personOverrideMessages
+        // return personOverrideMessages
     }
 
     public async getPersonOverrides(teamId: number): Promise<PersonOverrideDetails[]> {

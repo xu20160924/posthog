@@ -2359,19 +2359,9 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
         overrides.push({
             // B(*) -> A
             old_person_id: overrides[0].override_person_id, // B
-            override_person_id: new UUIDT().toString(), // A
+            override_person_id: overrides[0].old_person_id, // A
             distinct_id: null,
         })
-
-        overrides.push({
-            // A(a) -> C
-            old_person_id: overrides[0].old_person_id, // A
-            override_person_id: new UUIDT().toString(), // C
-            distinct_id: 'a',
-        })
-
-        // what about events that were written as B(a)? shouldn't they also be moved to C?
-        throw new Error('todo')
 
         await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
             for (const override of overrides) {
@@ -2379,7 +2369,22 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
             }
         })
 
-        expect(new Set(await writer.getPersonOverrides(teamId))).toEqual(new Set())
+        expect(new Set(await writer.getPersonOverrides(teamId))).toEqual(
+            new Set([
+                {
+                    old_person_id: overrides[0].old_person_id, // A
+                    override_person_id: overrides[0].old_person_id, // A
+                    distinct_id: 'a',
+                    ...defaults,
+                },
+                {
+                    old_person_id: overrides[1].old_person_id, // B
+                    override_person_id: overrides[0].old_person_id, // A
+                    distinct_id: null,
+                    ...defaults,
+                },
+            ])
+        )
     })
 })
 
