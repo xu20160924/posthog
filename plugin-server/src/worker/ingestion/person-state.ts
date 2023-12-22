@@ -816,20 +816,29 @@ export class FlatPersonOverrideWriter {
                         old_person_id, -- this doesn't ever change
                         ${overrideDetails.distinct_id} as distinct_id,
                         ${overrideDetails.override_person_id} as override_person_id,
-                        oldest_event, -- works as a lower bound here still
-                        version
-                    FROM posthog_flatpersonoverride AS old
-                    WHERE (
-                        -- we need to insert or update a row for any person who has
-                        -- previously used this distinct id, whether they did so
-                        -- explicitly (via a split) or not (via a merge)
-                        old.team_id = ${overrideDetails.team_id}
-                        AND old.override_person_id = ${overrideDetails.old_person_id}
-                        AND (
-                            old.distinct_id IS NULL
-                            OR old.distinct_id = ${overrideDetails.distinct_id}
-                        )
-                    )
+                        oldest_event,
+                        0 as version
+                    FROM (
+                        -- We need to insert or update a row for any person who
+                        -- has previously used this distinct id, whether they
+                        -- did so explicitly (via a split) or not (via a merge),
+                        -- so find all of those persons.
+                        SELECT
+                            team_id,
+                            old_person_id,
+                            max(oldest_event) as oldest_event -- XXX not sure this makes sense
+                        FROM posthog_flatpersonoverride AS old
+                        WHERE 
+                            old.team_id = ${overrideDetails.team_id}
+                            AND old.override_person_id = ${overrideDetails.old_person_id}
+                            AND (
+                                old.distinct_id IS NULL
+                                OR old.distinct_id = ${overrideDetails.distinct_id}
+                            )
+                        GROUP BY  -- we only want distinct (team_id, old_person_id)
+                            team_id,
+                            old_person_id
+                    ) t -- alias required here
                     ON CONFLICT ON CONSTRAINT "flatpersonoverride_unique_old_person_by_team"
                     DO UPDATE SET
                         override_person_id = EXCLUDED.override_person_id,
@@ -843,6 +852,7 @@ export class FlatPersonOverrideWriter {
                 undefined,
                 'personUnqualifiedOverride'
             )
+
             await this.postgres.query(
                 tx,
                 SQL`

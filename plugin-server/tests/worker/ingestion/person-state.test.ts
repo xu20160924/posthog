@@ -2386,6 +2386,80 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
             ])
         )
     })
+
+    it('handles a bizarre sequence of unhinged user actions', async () => {
+        const { postgres } = hub.db
+
+        const defaults = {
+            team_id: teamId,
+            oldest_event: DateTime.fromMillis(0),
+        }
+
+        // TODO: fix typing
+        const overrides = [
+            {
+                // A(a) -> B
+                old_person_id: new UUIDT().toString(), // A
+                override_person_id: new UUIDT().toString(), // B
+                distinct_id: 'a',
+            },
+        ]
+
+        overrides.push({
+            // B(*) -> A
+            old_person_id: overrides[0].override_person_id, // B
+            override_person_id: overrides[0].old_person_id, // A
+            distinct_id: null,
+        })
+
+        overrides.push({
+            // A(*) -> C
+            old_person_id: overrides[0].old_person_id, // A
+            override_person_id: new UUIDT().toString(), // C
+            distinct_id: null,
+        })
+
+        overrides.push({
+            // C(a) -> D
+            old_person_id: overrides[2].override_person_id, // C
+            override_person_id: new UUIDT().toString(), // D
+            distinct_id: 'a',
+        })
+
+        await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
+            for (const override of overrides) {
+                await writer.addPersonOverride(tx, { ...defaults, ...override })
+            }
+        })
+
+        expect(new Set(await writer.getPersonOverrides(teamId))).toEqual(
+            new Set([
+                // A(a), B(a), C(a) -> D
+                ...[overrides[0].old_person_id, overrides[1].old_person_id, overrides[2].override_person_id].map(
+                    (old_person_id) => ({
+                        old_person_id: old_person_id,
+                        override_person_id: overrides[3].override_person_id,
+                        distinct_id: 'a',
+                        ...defaults,
+                    })
+                ),
+                // A(*) -> C
+                {
+                    old_person_id: overrides[0].old_person_id,
+                    override_person_id: overrides[2].override_person_id,
+                    distinct_id: null,
+                    ...defaults,
+                },
+                // B(*) -> C
+                {
+                    old_person_id: overrides[1].old_person_id,
+                    override_person_id: overrides[2].override_person_id,
+                    distinct_id: null,
+                    ...defaults,
+                },
+            ])
+        )
+    })
 })
 
 describe('deferred person overrides', () => {
