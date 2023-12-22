@@ -2370,6 +2370,9 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
             distinct_id: 'a',
         })
 
+        // what about events that were written as B(a)? shouldn't they also be moved to C?
+        throw new Error('todo')
+
         await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
             for (const override of overrides) {
                 await writer.addPersonOverride(tx, { ...defaults, ...override })

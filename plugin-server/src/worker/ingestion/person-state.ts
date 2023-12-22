@@ -744,11 +744,11 @@ export class FlatPersonOverrideWriter {
     ): Promise<ProducerRecord[]> {
         const mergedAt = DateTime.now()
 
-        // TODO: This is going to need to support `ON CONFLICT` as qualified
-        // overrides may create cycles!
+        // XXX: this query is vulnerable to injection, but is updated here
+        // for demonstrative purposes, do not merge this as-is!
         await this.postgres.query(
             tx,
-            SQL`
+            `
                 INSERT INTO posthog_flatpersonoverride (
                     team_id,
                     old_person_id,
@@ -758,12 +758,21 @@ export class FlatPersonOverrideWriter {
                     version
                 ) VALUES (
                     ${overrideDetails.team_id},
-                    ${overrideDetails.old_person_id},
-                    ${overrideDetails.distinct_id},
-                    ${overrideDetails.override_person_id},
-                    ${overrideDetails.oldest_event},
+                    '${overrideDetails.old_person_id}',
+                    ${overrideDetails.distinct_id === null ? 'null' : `'${overrideDetails.distinct_id}'`},
+                    '${overrideDetails.override_person_id}',
+                    '${overrideDetails.oldest_event}',
                     0
-                )
+                ) ${
+                    overrideDetails.distinct_id !== null
+                        ? `
+                            ON CONFLICT ON CONSTRAINT "flatpersonoverride_unique_old_person_by_team"
+                            DO UPDATE SET
+                                override_person_id = EXCLUDED.override_person_id,
+                                version = posthog_flatpersonoverride.version + 1
+                        `
+                        : ''
+                }
             `,
             undefined,
             'personOverride'
