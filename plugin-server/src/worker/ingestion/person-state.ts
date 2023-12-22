@@ -769,6 +769,42 @@ export class FlatPersonOverrideWriter {
             'personOverride'
         )
 
+        if (overrideDetails.distinct_id !== null) {
+            // TODO: This also needs to be able to support `ON CONFLICT`, see above
+            // TODO: This will need to return a value that can be published to Kafka
+            await this.postgres.query(
+                tx,
+                SQL`
+                    INSERT INTO posthog_flatpersonoverride (
+                        team_id,
+                        old_person_id,
+                        distinct_id,
+                        override_person_id,
+                        oldest_event,
+                        version
+                    )
+                    SELECT
+                        team_id,
+                        old_person_id,
+                        ${overrideDetails.distinct_id} as distinct_id,
+                        ${overrideDetails.override_person_id} as override_person_id,
+                        oldest_event, -- works as a lower bound
+                        0
+                    FROM posthog_flatpersonoverride fpo
+                    WHERE (
+                        team_id = ${overrideDetails.team_id}
+                        AND fpo.override_person_id = ${overrideDetails.old_person_id}
+                        AND fpo.distinct_id IS NULL
+                    )
+                    RETURNING
+                        old_person_id,
+                        oldest_event
+                `,
+                undefined,
+                'personUnqualifiedOverride'
+            )
+        }
+
         const { rows: transitiveUpdates } = await this.postgres.query(
             tx,
             // XXX: this query is vulnerable to injection, but is updated here

@@ -2253,6 +2253,50 @@ describe.each(Object.keys(PersonOverridesWriterMode))('person overrides writer: 
             )
         )
     })
+
+    it('handles unqualified override followed by qualified override', async () => {
+        const { postgres } = hub.db
+
+        const defaults = {
+            team_id: teamId,
+            oldest_event: DateTime.fromMillis(0),
+        }
+
+        // TODO: fix typing
+        const overrides = [
+            {
+                old_person_id: new UUIDT().toString(), // A
+                override_person_id: new UUIDT().toString(), // B
+                distinct_id: null,
+            },
+        ]
+
+        overrides.push({
+            old_person_id: overrides[0].override_person_id, // B
+            override_person_id: new UUIDT().toString(), // C
+            distinct_id: 'a',
+        })
+
+        await postgres.transaction(PostgresUse.COMMON_WRITE, '', async (tx) => {
+            for (const override of overrides) {
+                await writer.addPersonOverride(tx, { ...defaults, ...override })
+            }
+        })
+
+        expect(new Set(await writer.getPersonOverrides(teamId))).toEqual(
+            new Set([
+                // both of the overrides should remain verbatim as inserted
+                ...overrides.map((override) => ({ ...override, ...defaults })),
+                // but we should have a *new* override that covers A(a) -> C
+                {
+                    old_person_id: overrides[0].old_person_id,
+                    override_person_id: overrides.at(-1)!.override_person_id,
+                    distinct_id: 'a',
+                    ...defaults,
+                },
+            ])
+        )
+    })
 })
 
 describe('deferred person overrides', () => {
