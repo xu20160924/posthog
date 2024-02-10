@@ -2,7 +2,15 @@ import { DateTime } from 'luxon'
 import { Pool } from 'pg'
 
 import { defaultConfig } from '../../src/config/config'
-import { ClickHouseTimestamp, Hub, Person, PropertyOperator, PropertyUpdateOperation, Team } from '../../src/types'
+import {
+    ClickHouseTimestamp,
+    Hub,
+    Person,
+    PersonValues,
+    PropertyOperator,
+    PropertyUpdateOperation,
+    Team,
+} from '../../src/types'
 import { DB, GroupId } from '../../src/utils/db/db'
 import { DependencyUnavailableError } from '../../src/utils/db/error'
 import { createHub } from '../../src/utils/db/hub'
@@ -267,230 +275,189 @@ describe('DB', () => {
         })
     })
 
-    async function fetchPersonByPersonId(teamId: number, personId: number): Promise<Person | undefined> {
-        const selectResult = await db.postgres.query(
-            PostgresUse.COMMON_WRITE,
-            `SELECT * FROM posthog_person WHERE team_id = $1 AND id = $2`,
-            [teamId, personId],
-            'fetchPersonByPersonId'
-        )
-
-        return selectResult.rows[0]
-    }
-
-    describe('createPerson', () => {
+    describe('persons', () => {
         let team: Team
-        const uuid = new UUIDT().toString()
+        let defaultValues: PersonValues
+
         const distinctId = 'distinct_id1'
 
         beforeEach(async () => {
             team = await getFirstTeam(hub)
+            defaultValues = {
+                created_at: TIMESTAMP,
+                properties: {},
+                properties_last_updated_at: {},
+                properties_last_operation: {},
+                team_id: team.id,
+                is_user_id: null,
+                is_identified: false,
+                uuid: new UUIDT().toString(),
+            } as PersonValues
         })
 
-        test('without properties', async () => {
-            const person = await db.createPerson(TIMESTAMP, {}, {}, {}, team.id, null, false, uuid, [distinctId])
-            const fetched_person = await fetchPersonByPersonId(team.id, person.id)
+        describe('createPerson', () => {
+            test('without properties', async () => {
+                const person = await db.createPersonFromValues(defaultValues, [distinctId])
+                expect(person).toMatchObject(defaultValues)
 
-            expect(fetched_person!.is_identified).toEqual(false)
-            expect(fetched_person!.properties).toEqual({})
-            expect(fetched_person!.properties_last_operation).toEqual({})
-            expect(fetched_person!.properties_last_updated_at).toEqual({})
-            expect(fetched_person!.uuid).toEqual(uuid)
-            expect(fetched_person!.team_id).toEqual(team.id)
-        })
-
-        test('without properties indentified true', async () => {
-            const person = await db.createPerson(TIMESTAMP, {}, {}, {}, team.id, null, true, uuid, [distinctId])
-            const fetched_person = await fetchPersonByPersonId(team.id, person.id)
-            expect(fetched_person!.is_identified).toEqual(true)
-            expect(fetched_person!.properties).toEqual({})
-            expect(fetched_person!.properties_last_operation).toEqual({})
-            expect(fetched_person!.properties_last_updated_at).toEqual({})
-            expect(fetched_person!.uuid).toEqual(uuid)
-            expect(fetched_person!.team_id).toEqual(team.id)
-        })
-
-        test('with properties', async () => {
-            const person = await db.createPerson(
-                TIMESTAMP,
-                { a: 123, b: false, c: 'bbb' },
-                { a: TIMESTAMP.toISO(), b: TIMESTAMP.toISO(), c: TIMESTAMP.toISO() },
-                { a: PropertyUpdateOperation.Set, b: PropertyUpdateOperation.Set, c: PropertyUpdateOperation.SetOnce },
-                team.id,
-                null,
-                false,
-                uuid,
-                [distinctId]
-            )
-            const fetched_person = await fetchPersonByPersonId(team.id, person.id)
-            expect(fetched_person!.is_identified).toEqual(false)
-            expect(fetched_person!.properties).toEqual({ a: 123, b: false, c: 'bbb' })
-            expect(fetched_person!.properties_last_operation).toEqual({
-                a: PropertyUpdateOperation.Set,
-                b: PropertyUpdateOperation.Set,
-                c: PropertyUpdateOperation.SetOnce,
-            })
-            expect(fetched_person!.properties_last_updated_at).toEqual({
-                a: TIMESTAMP.toISO(),
-                b: TIMESTAMP.toISO(),
-                c: TIMESTAMP.toISO(),
-            })
-            expect(fetched_person!.uuid).toEqual(uuid)
-            expect(fetched_person!.team_id).toEqual(team.id)
-        })
-    })
-
-    describe('updatePerson', () => {
-        it('Clickhouse and Postgres are in sync if multiple updates concurrently', async () => {
-            jest.spyOn(db.kafkaProducer!, 'queueMessage')
-            const team = await getFirstTeam(hub)
-            const uuid = new UUIDT().toString()
-            const distinctId = 'distinct_id1'
-            // Note that we update the person badly in case of concurrent updates, but lets make sure we're consistent
-            const personDbBefore = await db.createPerson(TIMESTAMP, { c: 'aaa' }, {}, {}, team.id, null, false, uuid, [
-                distinctId,
-            ])
-            const providedPersonTs = DateTime.fromISO('2000-04-04T11:42:06.502Z').toUTC()
-            const personProvided = { ...personDbBefore, properties: { c: 'bbb' }, created_at: providedPersonTs }
-            const updateTs = DateTime.fromISO('2000-04-04T11:42:06.502Z').toUTC()
-            const update = { created_at: updateTs }
-            const [updatedPerson] = await db.updatePersonDeprecated(personProvided, update)
-
-            // verify we have the correct update in Postgres db
-            const personDbAfter = await fetchPersonByPersonId(personDbBefore.team_id, personDbBefore.id)
-            expect(personDbAfter!.created_at).toEqual(updateTs.toISO())
-            // we didn't change properties so they should be what was in the db
-            expect(personDbAfter!.properties).toEqual({ c: 'aaa' })
-
-            //verify we got the expected updated person back
-            expect(updatedPerson.created_at).toEqual(updateTs)
-            expect(updatedPerson.properties).toEqual({ c: 'aaa' })
-
-            // verify correct Kafka message was sent
-            const expected_message = generateKafkaPersonUpdateMessage(
-                updateTs,
-                { c: 'aaa' },
-                personDbBefore.team_id,
-                personDbBefore.is_identified,
-                personDbBefore.uuid,
-                1
-            )
-            expect(db.kafkaProducer!.queueMessage).toHaveBeenLastCalledWith(expected_message)
-        })
-    })
-
-    describe('deletePerson', () => {
-        jest.setTimeout(60000)
-
-        const uuid = new UUIDT().toString()
-        it('deletes person from postgres', async () => {
-            const team = await getFirstTeam(hub)
-            // :TRICKY: We explicitly don't create distinct_ids here to keep the deletion process simpler.
-            const person = await db.createPerson(TIMESTAMP, {}, {}, {}, team.id, null, true, uuid, [])
-
-            await db.deletePerson(person)
-
-            const fetchedPerson = await fetchPersonByPersonId(team.id, person.id)
-            expect(fetchedPerson).toEqual(undefined)
-        })
-
-        describe('clickhouse behavior', () => {
-            beforeEach(async () => {
-                await resetTestDatabaseClickhouse()
-                // :TRICKY: Avoid collapsing rows before we are able to read them in the below tests.
-                await db.clickhouseQuery('SYSTEM STOP MERGES')
+                const fetched_person = await db.fetchPerson(team.id, distinctId)
+                expect(fetched_person).toMatchObject(defaultValues)
             })
 
-            afterEach(async () => {
-                await db.clickhouseQuery('SYSTEM START MERGES')
+            test('without properties indentified true', async () => {
+                const values = { ...defaultValues, is_identified: true }
+
+                const person = await db.createPersonFromValues(values, [distinctId])
+                expect(person).toMatchObject(values)
+
+                const fetched_person = await db.fetchPerson(team.id, distinctId)
+                expect(fetched_person).toMatchObject(values)
             })
 
-            async function fetchPersonsRows(options: { final?: boolean } = {}) {
-                const query = `SELECT * FROM person ${options.final ? 'FINAL' : ''} WHERE id = '${uuid}'`
-                return (await db.clickhouseQuery(query)).data
-            }
+            test('with properties', async () => {
+                const values = {
+                    ...defaultValues,
+                    properties: { a: 123, b: false, c: 'bbb' },
+                    properties_last_updated_at: { a: TIMESTAMP.toISO(), b: TIMESTAMP.toISO(), c: TIMESTAMP.toISO() },
+                    properties_last_operation: {
+                        a: PropertyUpdateOperation.Set,
+                        b: PropertyUpdateOperation.Set,
+                        c: PropertyUpdateOperation.SetOnce,
+                    },
+                }
 
-            it('marks person as deleted in clickhouse', async () => {
-                const team = await getFirstTeam(hub)
+                const person = await db.createPersonFromValues(values, [distinctId])
+                expect(person).toMatchObject(values)
+
+                const fetched_person = await db.fetchPerson(team.id, distinctId)
+                expect(fetched_person).toMatchObject(values)
+            })
+        })
+
+        describe('updatePerson', () => {
+            it('Clickhouse and Postgres are in sync if multiple updates concurrently', async () => {
+                jest.spyOn(db.kafkaProducer!, 'queueMessage')
+                const distinctId = 'distinct_id1'
+
+                const values = { ...defaultValues, properties: { c: 'aaa' } }
+                // Note that we update the person badly in case of concurrent updates, but lets make sure we're consistent
+                const personDbBefore = await db.createPersonFromValues(values, [distinctId])
+
+                const providedPersonTs = DateTime.fromISO('2000-04-04T11:42:06.502Z').toUTC()
+                const personProvided = { ...personDbBefore, properties: { c: 'bbb' }, created_at: providedPersonTs }
+                const updateTs = DateTime.fromISO('2000-04-04T11:42:06.502Z').toUTC()
+                const update = { created_at: updateTs }
+                const [updatedPerson] = await db.updatePersonDeprecated(personProvided, update)
+
+                // verify we have the correct update in Postgres db
+                const personDbAfter = await db.fetchPerson(team.id, distinctId)
+
+                // we didn't change properties so they should be what was in the db
+                expect(personDbAfter!.properties).toEqual({ c: 'aaa' })
+
+                //verify we got the expected updated person back
+                expect(updatedPerson).toEqual(personDbAfter)
+
+                // verify correct Kafka message was sent
+                const expected_message = generateKafkaPersonUpdateMessage(personDbAfter!)
+                expect(db.kafkaProducer!.queueMessage).toHaveBeenLastCalledWith(expected_message)
+            })
+        })
+        describe('deletePerson', () => {
+            jest.setTimeout(60000)
+
+            it('deletes person from postgres', async () => {
                 // :TRICKY: We explicitly don't create distinct_ids here to keep the deletion process simpler.
-                const person = await db.createPerson(TIMESTAMP, {}, {}, {}, team.id, null, true, uuid, [])
-                await delayUntilEventIngested(fetchPersonsRows, 1)
+                const person = await db.createPersonFromValues(defaultValues, [])
+                await db.deletePerson(person)
 
-                // We do an update to verify
-                await db.updatePersonDeprecated(person, { properties: { foo: 'bar' } })
-                await db.kafkaProducer.flush()
-                await delayUntilEventIngested(fetchPersonsRows, 2)
-
-                const kafkaMessages = await db.deletePerson(person)
-                await db.kafkaProducer.queueMessages(kafkaMessages)
-                await db.kafkaProducer.flush()
-
-                const persons = await delayUntilEventIngested(fetchPersonsRows, 3)
-
-                expect(persons).toEqual(
-                    expect.arrayContaining([
-                        expect.objectContaining({
-                            id: uuid,
-                            properties: JSON.stringify({}),
-                            is_deleted: 0,
-                            version: 0,
-                        }),
-                        expect.objectContaining({
-                            id: uuid,
-                            properties: JSON.stringify({ foo: 'bar' }),
-                            is_deleted: 0,
-                            version: 1,
-                        }),
-                        expect.objectContaining({
-                            id: uuid,
-                            is_deleted: 1,
-                            version: 101,
-                        }),
-                    ])
+                // NOTE: we don't have a method for fetching by person ID
+                const {
+                    rows: [{ count }],
+                } = await db.postgres.query(
+                    PostgresUse.COMMON_WRITE,
+                    'SELECT count(*) as count FROM posthog_person WHERE id = $1',
+                    [person.id],
+                    'getPersonExists'
                 )
+                expect(Number(count)).toEqual(0)
+            })
 
-                const personsFinal = await fetchPersonsRows({ final: true })
-                expect(personsFinal).toEqual(
-                    expect.arrayContaining([
-                        expect.objectContaining({
-                            id: uuid,
-                            is_deleted: 1,
-                            version: 101,
-                        }),
-                    ])
-                )
+            describe('clickhouse behavior', () => {
+                beforeEach(async () => {
+                    await resetTestDatabaseClickhouse()
+                    // :TRICKY: Avoid collapsing rows before we are able to read them in the below tests.
+                    await db.clickhouseQuery('SYSTEM STOP MERGES')
+                })
+
+                afterEach(async () => {
+                    await db.clickhouseQuery('SYSTEM START MERGES')
+                })
+
+                async function fetchPersonsRows(options: { final?: boolean } = {}) {
+                    const query = `SELECT * FROM person ${options.final ? 'FINAL' : ''} WHERE id = '${
+                        defaultValues.uuid
+                    }'`
+                    return (await db.clickhouseQuery(query)).data
+                }
+
+                it('marks person as deleted in clickhouse', async () => {
+                    // :TRICKY: We explicitly don't create distinct_ids here to keep the deletion process simpler.
+                    const person = await db.createPersonFromValues(defaultValues, [])
+                    await delayUntilEventIngested(fetchPersonsRows, 1)
+
+                    // We do an update to verify
+                    await db.updatePersonDeprecated(person, { properties: { foo: 'bar' } })
+                    await db.kafkaProducer.flush()
+                    await delayUntilEventIngested(fetchPersonsRows, 2)
+
+                    const kafkaMessages = await db.deletePerson(person)
+                    await db.kafkaProducer.queueMessages(kafkaMessages)
+                    await db.kafkaProducer.flush()
+
+                    const persons = await delayUntilEventIngested(fetchPersonsRows, 3)
+
+                    expect(persons).toEqual(
+                        expect.arrayContaining([
+                            expect.objectContaining({
+                                id: person.uuid,
+                                properties: JSON.stringify({}),
+                                is_deleted: 0,
+                                version: 0,
+                            }),
+                            expect.objectContaining({
+                                id: person.uuid,
+                                properties: JSON.stringify({ foo: 'bar' }),
+                                is_deleted: 0,
+                                version: 1,
+                            }),
+                            expect.objectContaining({
+                                id: person.uuid,
+                                is_deleted: 1,
+                                version: 101,
+                            }),
+                        ])
+                    )
+
+                    const personsFinal = await fetchPersonsRows({ final: true })
+                    expect(personsFinal).toEqual(
+                        expect.arrayContaining([
+                            expect.objectContaining({
+                                id: person.uuid,
+                                is_deleted: 1,
+                                version: 101,
+                            }),
+                        ])
+                    )
+                })
             })
         })
-    })
 
-    describe('fetchPerson()', () => {
-        it('returns undefined if person does not exist', async () => {
-            const team = await getFirstTeam(hub)
-            const person = await hub.db.fetchPerson(team.id, 'some_id')
-
-            expect(person).toEqual(undefined)
-        })
-
-        it('returns person object if person exists', async () => {
-            const team = await getFirstTeam(hub)
-            const uuid = new UUIDT().toString()
-            const createdPerson = await db.createPerson(TIMESTAMP, { foo: 'bar' }, {}, {}, team.id, null, true, uuid, [
-                'some_id',
-            ])
-
-            const person = await db.fetchPerson(team.id, 'some_id')
-
-            expect(person).toEqual(createdPerson)
-            expect(person).toEqual(
-                expect.objectContaining({
-                    id: expect.any(Number),
-                    uuid: uuid.toString(),
-                    properties: { foo: 'bar' },
-                    is_identified: true,
-                    created_at: TIMESTAMP,
-                    version: 0,
-                })
-            )
+        describe('fetchPerson()', () => {
+            it('returns undefined if person does not exist', async () => {
+                const person = await hub.db.fetchPerson(team.id, 'some_id')
+                expect(person).toEqual(undefined)
+            })
         })
     })
 
