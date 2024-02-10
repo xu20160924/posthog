@@ -157,12 +157,8 @@ export class PersonState {
             return [person, false]
         }
 
-        const properties = this.eventProperties['$set'] || {}
-        const propertiesOnce = this.eventProperties['$set_once'] || {}
         person = await this.createPerson(
             this.timestamp,
-            properties || {},
-            propertiesOnce || {},
             this.teamId,
             null,
             // :NOTE: This should never be set in this branch, but adding this for logical consistency
@@ -176,8 +172,6 @@ export class PersonState {
 
     private async createPerson(
         createdAt: DateTime,
-        properties: Properties,
-        propertiesOnce: Properties,
         teamId: number,
         isUserId: number | null,
         isIdentified: boolean,
@@ -187,10 +181,14 @@ export class PersonState {
     ): Promise<Person> {
         const propertiesLastOperation: Record<string, any> = {}
         const propertiesLastUpdatedAt: Record<string, any> = {}
+
+        const propertiesOnce = this.eventProperties['$set_once'] || {}
         Object.keys(propertiesOnce).forEach((key) => {
             propertiesLastOperation[key] = PropertyUpdateOperation.SetOnce
             propertiesLastUpdatedAt[key] = createdAt
         })
+
+        const properties = this.eventProperties['$set'] || {}
         Object.keys(properties).forEach((key) => {
             propertiesLastOperation[key] = PropertyUpdateOperation.Set
             propertiesLastUpdatedAt[key] = createdAt
@@ -381,8 +379,6 @@ export class PersonState {
         return await this.createPerson(
             // TODO: in this case we could skip the properties updates later
             timestamp,
-            this.eventProperties['$set'] || {},
-            this.eventProperties['$set_once'] || {},
             teamId,
             null,
             true,
