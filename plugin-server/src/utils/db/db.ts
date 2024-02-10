@@ -43,6 +43,7 @@ import {
     RawGroup,
     RawOrganization,
     RawPerson,
+    RawPersonValues,
     RawSessionRecordingEvent,
     Team,
     TeamId,
@@ -550,6 +551,30 @@ export class DB {
         }
     }
 
+    private toRawPersonValues(values: PersonValues): RawPersonValues {
+        return {
+            ...values,
+            created_at: values.created_at.toISO(),
+        }
+    }
+
+    private toRawPersonValuesPartial(person: Partial<PersonValues>): Partial<RawPersonValues> {
+        const { created_at, ...rest } = person
+        const record: Partial<RawPerson> = { ...rest }
+        if (created_at !== undefined) {
+            record.created_at = created_at.toISO()
+        }
+        return record
+    }
+
+    private toPerson(record: RawPerson): Person {
+        return {
+            ...record,
+            created_at: DateTime.fromISO(record.created_at).toUTC(),
+            version: Number(record.version || 0),
+        }
+    }
+
     public async fetchPersons(database?: Database.Postgres): Promise<Person[]>
     public async fetchPersons(database: Database.ClickHouse): Promise<ClickHousePerson[]>
     public async fetchPersons(database: Database = Database.Postgres): Promise<Person[] | ClickHousePerson[]> {
@@ -652,10 +677,36 @@ export class DB {
         isUserId: number | null,
         isIdentified: boolean,
         uuid: string,
-        distinctIds?: string[]
+        distinctIds: string[] = []
     ): Promise<Person> {
-        distinctIds ||= []
-        const version = 0 // We're creating the person now!
+        return await this.createPersonFromValues(
+            {
+                team_id: teamId,
+                properties: properties,
+                is_user_id: isUserId,
+                is_identified: isIdentified,
+                uuid: uuid,
+                properties_last_updated_at: propertiesLastUpdatedAt,
+                properties_last_operation: propertiesLastOperation,
+                created_at: createdAt,
+            },
+            distinctIds
+        )
+    }
+
+    public async createPersonFromValues(values: PersonValues, distinctIds: string[]) {
+        const rawValues = this.toRawPersonValues(values)
+
+        const parameters = [
+            rawValues.created_at,
+            sanitizeJsonbValue(rawValues.properties), // TODO: would be nice to encapsulate this better
+            sanitizeJsonbValue(rawValues.properties_last_updated_at),
+            sanitizeJsonbValue(rawValues.properties_last_operation),
+            rawValues.team_id, // NOTE: this is referred to multiple times by index
+            rawValues.is_user_id,
+            rawValues.is_identified,
+            rawValues.uuid,
+        ]
 
         const insertResult = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
@@ -664,7 +715,7 @@ export class DB {
                         created_at, properties, properties_last_updated_at,
                         properties_last_operation, team_id, is_user_id, is_identified, uuid, version
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
                     RETURNING *
                 )` +
                 distinctIds
@@ -673,20 +724,12 @@ export class DB {
                         // `addDistinctIdPooled`
                         (_, index) => `, distinct_id_${index} AS (
                         INSERT INTO posthog_persondistinctid (distinct_id, person_id, team_id, version)
-                        VALUES ($${10 + index}, (SELECT id FROM inserted_person), $5, $9))`
+                        VALUES ($${parameters.length + 1 + index}, (SELECT id FROM inserted_person), $5, 0))`
                     )
                     .join('') +
                 `SELECT * FROM inserted_person;`,
             [
-                createdAt.toISO(),
-                sanitizeJsonbValue(properties),
-                sanitizeJsonbValue(propertiesLastUpdatedAt),
-                sanitizeJsonbValue(propertiesLastOperation),
-                teamId,
-                isUserId,
-                isIdentified,
-                uuid,
-                version,
+                ...parameters,
                 // The copy and reverse here is to maintain compatability with pre-existing code
                 // and tests. Postgres appears to assign IDs in reverse order of the INSERTs in the
                 // CTEs above, so we need to reverse the distinctIds to match the old behavior where
@@ -708,9 +751,9 @@ export class DB {
                     {
                         value: JSON.stringify({
                             person_id: person.uuid,
-                            team_id: teamId,
+                            team_id: person.team_id,
                             distinct_id: distinctId,
-                            version,
+                            version: 0,
                             is_deleted: 0,
                         }),
                     },
@@ -722,33 +765,13 @@ export class DB {
         return person
     }
 
-    private unparsePersonPartial(person: Partial<Person>): Partial<RawPerson> {
-        const { created_at, version, ...rest } = person
-        const record: Partial<RawPerson> = { ...rest }
-        if (created_at !== undefined) {
-            record.created_at = created_at.toISO()
-        }
-        if (version !== undefined) {
-            record.version = version.toString()
-        }
-        return record
-    }
-
-    private toPerson(record: RawPerson): Person {
-        return {
-            ...record,
-            created_at: DateTime.fromISO(record.created_at).toUTC(),
-            version: Number(record.version || 0),
-        }
-    }
-
     // Currently in use, but there are various problems with this function
     public async updatePersonDeprecated(
         person: Person,
         update: Partial<PersonValues>,
         tx?: TransactionClient
     ): Promise<[Person, ProducerRecord[]]> {
-        const rawUpdate = this.unparsePersonPartial(update)
+        const rawUpdate = this.toRawPersonValuesPartial(update)
         const rawUpdateValues = Object.values(rawUpdate)
 
         // short circuit if there are no updates to be made
