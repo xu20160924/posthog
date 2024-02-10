@@ -699,28 +699,34 @@ export interface DeadLetterQueueEvent {
 export type PropertiesLastUpdatedAt = Record<string, string>
 export type PropertiesLastOperation = Record<string, PropertyUpdateOperation>
 
-/** Properties shared by RawPerson and Person. */
-export interface BasePerson {
+export interface PersonValues {
+    readonly team_id: number
+    properties: Properties
+    is_user_id: number | null
+    is_identified: boolean
+    readonly uuid: string
+    properties_last_updated_at: PropertiesLastUpdatedAt
+    properties_last_operation: PropertiesLastOperation | null
+    readonly created_at: DateTime
+}
+
+export interface Person extends PersonValues {
+    readonly id: number
+    readonly version: number
+}
+
+/** Raw Person row from database. */
+export interface RawPerson {
     id: number
     team_id: number
     properties: Properties
-    is_user_id: number
+    is_user_id: number | null
     is_identified: boolean
     uuid: string
     properties_last_updated_at: PropertiesLastUpdatedAt
     properties_last_operation: PropertiesLastOperation | null
-}
-
-/** Raw Person row from database. */
-export interface RawPerson extends BasePerson {
     created_at: string
     version: string | null
-}
-
-/** Usable Person model. */
-export interface Person extends BasePerson {
-    created_at: DateTime
-    version: number
 }
 
 /** Clickhouse Person model. */
