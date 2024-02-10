@@ -651,7 +651,7 @@ export class DB {
         }
         const values = [teamId, distinctId]
 
-        const selectResult: QueryResult = await this.postgres.query<RawPerson>(
+        const selectResult = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
             queryString,
             values,
@@ -659,12 +659,7 @@ export class DB {
         )
 
         if (selectResult.rows.length > 0) {
-            const rawPerson = selectResult.rows[0]
-            return {
-                ...rawPerson,
-                created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-                version: Number(rawPerson.version || 0),
-            }
+            return this.toPerson(selectResult.rows[0])
         }
     }
 
