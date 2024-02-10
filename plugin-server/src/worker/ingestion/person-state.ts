@@ -6,7 +6,7 @@ import { Counter } from 'prom-client'
 import { KafkaProducerWrapper } from 'utils/db/kafka-producer-wrapper'
 
 import { KAFKA_PERSON_OVERRIDE } from '../../config/kafka-topics'
-import { Person, PropertyUpdateOperation, TimestampFormat } from '../../types'
+import { Person, PersonValues, PropertyUpdateOperation, TimestampFormat } from '../../types'
 import { DB } from '../../utils/db/db'
 import { PostgresRouter, PostgresUse, TransactionClient } from '../../utils/db/postgres'
 import { timeoutGuard } from '../../utils/db/utils'
@@ -213,7 +213,7 @@ export class PersonState {
     private async updatePersonProperties(person: Person): Promise<Person> {
         person.properties ||= {}
 
-        const update: Partial<Person> = {}
+        const update: Partial<PersonValues> = {}
         if (this.applyEventPropertyUpdates(person.properties)) {
             update.properties = person.properties
         }

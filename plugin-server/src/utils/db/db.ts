@@ -29,6 +29,7 @@ import {
     OrganizationMembershipLevel,
     Person,
     PersonDistinctId,
+    PersonValues,
     Plugin,
     PluginConfig,
     PluginLogEntry,
@@ -744,7 +745,7 @@ export class DB {
     // Currently in use, but there are various problems with this function
     public async updatePersonDeprecated(
         person: Person,
-        update: Partial<Person>, // TODO: Should be PersonValues
+        update: Partial<PersonValues>,
         tx?: TransactionClient
     ): Promise<[Person, ProducerRecord[]]> {
         const rawUpdate = this.unparsePersonPartial(update)
