@@ -78,7 +78,6 @@ import {
     sanitizeJsonbValue,
     shouldStoreLog,
     timeoutGuard,
-    unparsePersonPartial,
 } from './utils'
 
 export interface LogEntryPayload {
@@ -728,26 +727,39 @@ export class DB {
         return person
     }
 
+    private unparsePersonPartial(person: Partial<Person>): Partial<RawPerson> {
+        const { created_at, version, ...rest } = person
+        const record: Partial<RawPerson> = { ...rest }
+        if (created_at !== undefined) {
+            record.created_at = created_at.toISO()
+        }
+        if (version !== undefined) {
+            record.version = version.toString()
+        }
+        return record
+    }
+
     // Currently in use, but there are various problems with this function
     public async updatePersonDeprecated(
         person: Person,
         update: Partial<Person>,
         tx?: TransactionClient
     ): Promise<[Person, ProducerRecord[]]> {
-        const updateValues = Object.values(unparsePersonPartial(update))
+        const rawUpdate = this.unparsePersonPartial(update)
+        const rawUpdateValues = Object.values(rawUpdate)
 
         // short circuit if there are no updates to be made
-        if (updateValues.length === 0) {
+        if (rawUpdateValues.length === 0) {
             return [person, []]
         }
 
-        const values = [...updateValues, person.id].map(sanitizeJsonbValue)
+        const values = [...rawUpdateValues, person.id].map(sanitizeJsonbValue)
 
         // Potentially overriding values badly if there was an update to the person after computing updateValues above
         const queryString = `UPDATE posthog_person SET version = COALESCE(version, 0)::numeric + 1, ${Object.keys(
-            update
+            rawUpdate
         ).map((field, index) => `"${sanitizeSqlIdentifier(field)}" = $${index + 1}`)} WHERE id = $${
-            Object.values(update).length + 1
+            rawUpdateValues.length + 1
         }
         RETURNING *`
 

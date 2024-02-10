@@ -6,13 +6,9 @@ import { Counter } from 'prom-client'
 
 import { defaultConfig } from '../../config/config'
 import { KAFKA_PERSON } from '../../config/kafka-topics'
-import { BasePerson, Person, PluginLogEntryType, PluginLogLevel, RawPerson, TimestampFormat } from '../../types'
+import { PluginLogEntryType, PluginLogLevel, TimestampFormat } from '../../types'
 import { status } from '../../utils/status'
 import { castTimestampOrNow } from '../../utils/utils'
-
-export function unparsePersonPartial(person: Partial<Person>): Partial<RawPerson> {
-    return { ...(person as BasePerson), ...(person.created_at ? { created_at: person.created_at.toISO() } : {}) }
-}
 
 export function escapeQuotes(input: string): string {
     return input.replace(/"/g, '\\"')
