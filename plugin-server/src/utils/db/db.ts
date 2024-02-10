@@ -753,20 +753,24 @@ export class DB {
             return [person, []]
         }
 
-        const values = [...rawUpdateValues, person.id].map(sanitizeJsonbValue)
-
         // Potentially overriding values badly if there was an update to the person after computing updateValues above
-        const queryString = `UPDATE posthog_person SET version = COALESCE(version, 0)::numeric + 1, ${Object.keys(
-            rawUpdate
-        ).map((field, index) => `"${sanitizeSqlIdentifier(field)}" = $${index + 1}`)} WHERE id = $${
-            rawUpdateValues.length + 1
-        }
-        RETURNING *`
-
-        const updateResult: QueryResult = await this.postgres.query(
+        const updateResult = await this.postgres.query(
             tx ?? PostgresUse.COMMON_WRITE,
-            queryString,
-            values,
+            `
+                UPDATE posthog_person
+                SET
+                    version = COALESCE(version, 0)::numeric + 1,
+                    ${
+                        // Indices are offset by 2 to account for the WHERE
+                        // clause and the SQL parameter list being 1-indexed
+                        Object.keys(rawUpdate)
+                            .map((field, index) => `"${sanitizeSqlIdentifier(field)}" = $${index + 2}`)
+                            .join(', ')
+                    }
+                WHERE id = $1
+                RETURNING *
+            `,
+            [person.id, ...rawUpdateValues.map(sanitizeJsonbValue)],
             'updatePerson'
         )
         if (updateResult.rows.length == 0) {
