@@ -762,7 +762,7 @@ export class DB {
         }
 
         // Potentially overriding values badly if there was an update to the person after computing updateValues above
-        const { rows: updatedRows }: QueryResult<RawPerson> = await this.postgres.query(
+        const { rows: updatedRows } = await this.postgres.query<RawPerson>(
             tx ?? PostgresUse.COMMON_WRITE,
             `
                 UPDATE posthog_person
