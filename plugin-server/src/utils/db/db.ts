@@ -703,11 +703,9 @@ export class DB {
             version,
         } as Person
 
-        const kafkaMessages: ProducerRecord[] = []
-        kafkaMessages.push(generateKafkaPersonUpdateMessage(createdAt, properties, teamId, isIdentified, uuid, version))
-
-        for (const distinctId of distinctIds) {
-            kafkaMessages.push({
+        const kafkaMessages: ProducerRecord[] = [
+            generateKafkaPersonUpdateMessage(person),
+            ...distinctIds.map((distinctId) => ({
                 topic: KAFKA_PERSON_DISTINCT_ID,
                 messages: [
                     {
@@ -720,8 +718,8 @@ export class DB {
                         }),
                     },
                 ],
-            })
-        }
+            })),
+        ]
 
         await this.kafkaProducer.queueMessages(kafkaMessages)
         return person
