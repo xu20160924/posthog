@@ -656,7 +656,7 @@ export class DB {
         distinctIds ||= []
         const version = 0 // We're creating the person now!
 
-        const insertResult = await this.postgres.query(
+        const insertResult = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
             `WITH inserted_person AS (
                     INSERT INTO posthog_person (
@@ -696,12 +696,8 @@ export class DB {
             ],
             'insertPerson'
         )
-        const personCreated = insertResult.rows[0] as RawPerson
-        const person = {
-            ...personCreated,
-            created_at: DateTime.fromISO(personCreated.created_at).toUTC(),
-            version,
-        } as Person
+
+        const person = this.toPerson(insertResult.rows[0])
 
         const kafkaMessages: ProducerRecord[] = [
             generateKafkaPersonUpdateMessage(person),
@@ -720,8 +716,8 @@ export class DB {
                 ],
             })),
         ]
-
         await this.kafkaProducer.queueMessages(kafkaMessages)
+
         return person
     }
 
