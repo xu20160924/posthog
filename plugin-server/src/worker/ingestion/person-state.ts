@@ -185,7 +185,6 @@ export class PersonState {
         creatorEventUuid: string,
         distinctIds?: string[]
     ): Promise<Person> {
-        const props = { ...propertiesOnce, ...properties, ...{ $creator_event_uuid: creatorEventUuid } }
         const propertiesLastOperation: Record<string, any> = {}
         const propertiesLastUpdatedAt: Record<string, any> = {}
         Object.keys(propertiesOnce).forEach((key) => {
@@ -197,16 +196,18 @@ export class PersonState {
             propertiesLastUpdatedAt[key] = createdAt
         })
 
-        return await this.db.createPerson(
-            createdAt,
-            props,
-            propertiesLastUpdatedAt,
-            propertiesLastOperation,
-            teamId,
-            isUserId,
-            isIdentified,
-            uuid,
-            distinctIds
+        return await this.db.createPersonFromValues(
+            {
+                team_id: teamId,
+                properties: { ...propertiesOnce, ...properties, ...{ $creator_event_uuid: creatorEventUuid } },
+                is_user_id: isUserId,
+                is_identified: isIdentified,
+                uuid: uuid,
+                properties_last_updated_at: propertiesLastUpdatedAt,
+                properties_last_operation: propertiesLastOperation,
+                created_at: createdAt,
+            },
+            distinctIds || []
         )
     }
 
