@@ -1,12 +1,11 @@
 import { Properties } from '@posthog/plugin-scaffold'
 import * as Sentry from '@sentry/node'
 import { ProducerRecord } from 'kafkajs'
-import { DateTime } from 'luxon'
 import { Counter } from 'prom-client'
 
 import { defaultConfig } from '../../config/config'
 import { KAFKA_PERSON } from '../../config/kafka-topics'
-import { PluginLogEntryType, PluginLogLevel, TimestampFormat } from '../../types'
+import { Person, PluginLogEntryType, PluginLogLevel, TimestampFormat } from '../../types'
 import { status } from '../../utils/status'
 import { castTimestampOrNow } from '../../utils/utils'
 
@@ -95,27 +94,19 @@ export function personInitialAndUTMProperties(properties: Properties): Propertie
     return propertiesCopy
 }
 
-export function generateKafkaPersonUpdateMessage(
-    createdAt: DateTime | string,
-    properties: Properties,
-    teamId: number,
-    isIdentified: boolean,
-    id: string,
-    version: number,
-    isDeleted = 0
-): ProducerRecord {
+export function generateKafkaPersonUpdateMessage(person: Person, isDeleted = 0): ProducerRecord {
     return {
         topic: KAFKA_PERSON,
         messages: [
             {
                 value: JSON.stringify({
-                    id,
-                    created_at: castTimestampOrNow(createdAt, TimestampFormat.ClickHouseSecondPrecision),
-                    properties: JSON.stringify(properties),
-                    team_id: teamId,
-                    is_identified: isIdentified,
+                    id: person.uuid,
+                    created_at: castTimestampOrNow(person.created_at, TimestampFormat.ClickHouseSecondPrecision),
+                    properties: JSON.stringify(person.properties),
+                    team_id: person.team_id,
+                    is_identified: person.is_identified,
                     is_deleted: isDeleted,
-                    ...(version !== null ? { version } : {}),
+                    version: person.version,
                 }),
             },
         ],

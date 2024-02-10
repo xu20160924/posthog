@@ -796,14 +796,7 @@ export class DB {
         }
 
         const kafkaMessages = []
-        const message = generateKafkaPersonUpdateMessage(
-            updatedPerson.created_at,
-            updatedPerson.properties,
-            updatedPerson.team_id,
-            updatedPerson.is_identified,
-            updatedPerson.uuid,
-            updatedPerson.version
-        )
+        const message = generateKafkaPersonUpdateMessage(updatedPerson)
         if (tx) {
             kafkaMessages.push(message)
         } else {
@@ -819,29 +812,19 @@ export class DB {
     }
 
     public async deletePerson(person: Person, tx?: TransactionClient): Promise<ProducerRecord[]> {
-        const result = await this.postgres.query<{ version: string }>(
+        const { rows: deletedPersons } = await this.postgres.query<RawPerson>(
             tx ?? PostgresUse.COMMON_WRITE,
-            'DELETE FROM posthog_person WHERE team_id = $1 AND id = $2 RETURNING version',
+            `
+                DELETE FROM posthog_person
+                WHERE team_id = $1 AND id = $2
+                RETURNING *
+            `,
             [person.team_id, person.id],
             'deletePerson'
         )
 
-        let kafkaMessages: ProducerRecord[] = []
-
-        if (result.rows.length > 0) {
-            kafkaMessages = [
-                generateKafkaPersonUpdateMessage(
-                    person.created_at,
-                    person.properties,
-                    person.team_id,
-                    person.is_identified,
-                    person.uuid,
-                    Number(result.rows[0].version || 0) + 100, // keep in sync with delete_person in posthog/models/person/util.py
-                    1
-                ),
-            ]
-        }
-        return kafkaMessages
+        // TODO: Number(result.rows[0].version || 0) + 100, // keep in sync with delete_person in posthog/models/person/util.py
+        return deletedPersons.map((person) => generateKafkaPersonUpdateMessage(this.toPerson(person), 1))
     }
 
     // PersonDistinctId
