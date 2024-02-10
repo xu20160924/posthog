@@ -705,6 +705,8 @@ export interface PersonValues {
     is_user_id: number | null
     is_identified: boolean
     readonly uuid: string
+    // TODO: These properties_* are probably at the wrong level of abstraction
+    // here and should be pushed down closer to the data access layer
     properties_last_updated_at: PropertiesLastUpdatedAt
     properties_last_operation: PropertiesLastOperation | null
     readonly created_at: DateTime
