@@ -199,14 +199,18 @@ export class PersonState {
         return await this.db.createPersonFromValues(
             {
                 team_id: teamId,
-                properties: { ...propertiesOnce, ...properties, ...{ $creator_event_uuid: creatorEventUuid } },
+                properties: {
+                    ...propertiesOnce,
+                    ...properties,
+                    ...{ $creator_event_uuid: creatorEventUuid },
+                },
                 is_user_id: isUserId,
                 is_identified: isIdentified,
                 uuid: uuid,
                 properties_last_updated_at: propertiesLastUpdatedAt,
                 properties_last_operation: propertiesLastOperation,
                 created_at: createdAt,
-            },
+            } as PersonValues,
             distinctIds || []
         )
     }
