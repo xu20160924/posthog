@@ -739,10 +739,18 @@ export class DB {
         return record
     }
 
+    private toPerson(record: RawPerson): Person {
+        return {
+            ...record,
+            created_at: DateTime.fromISO(record.created_at).toUTC(),
+            version: Number(record.version || 0),
+        }
+    }
+
     // Currently in use, but there are various problems with this function
     public async updatePersonDeprecated(
         person: Person,
-        update: Partial<Person>,
+        update: Partial<Person>, // TODO: Should be PersonValues
         tx?: TransactionClient
     ): Promise<[Person, ProducerRecord[]]> {
         const rawUpdate = this.unparsePersonPartial(update)
@@ -754,7 +762,7 @@ export class DB {
         }
 
         // Potentially overriding values badly if there was an update to the person after computing updateValues above
-        const updateResult = await this.postgres.query(
+        const { rows: updatedRows }: QueryResult<RawPerson> = await this.postgres.query(
             tx ?? PostgresUse.COMMON_WRITE,
             `
                 UPDATE posthog_person
@@ -773,17 +781,12 @@ export class DB {
             [person.id, ...rawUpdateValues.map(sanitizeJsonbValue)],
             'updatePerson'
         )
-        if (updateResult.rows.length == 0) {
+        if (updatedRows.length == 0) {
             throw new NoRowsUpdatedError(
                 `Person with team_id="${person.team_id}" and uuid="${person.uuid} couldn't be updated`
             )
         }
-        const updatedPersonRaw = updateResult.rows[0] as RawPerson
-        const updatedPerson = {
-            ...updatedPersonRaw,
-            created_at: DateTime.fromISO(updatedPersonRaw.created_at).toUTC(),
-            version: Number(updatedPersonRaw.version || 0),
-        } as Person
+        const updatedPerson = this.toPerson(updatedRows[0])
 
         // Track the disparity between the version on the database and the version of the person we have in memory
         // Without races, the returned person (updatedPerson) should have a version that's only +1 the person in memory
