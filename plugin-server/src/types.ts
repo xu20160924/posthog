@@ -715,23 +715,6 @@ export interface Person extends PersonValues {
     readonly version: number
 }
 
-export interface RawPersonValues {
-    team_id: number
-    properties: Properties
-    is_user_id: number | null
-    is_identified: boolean
-    uuid: string
-    properties_last_updated_at: PropertiesLastUpdatedAt
-    properties_last_operation: PropertiesLastOperation | null
-    created_at: string
-}
-
-/** Raw Person row from database. */
-export interface RawPerson extends RawPersonValues {
-    readonly id: number
-    readonly version: string | null
-}
-
 /** Clickhouse Person model. */
 export interface ClickHousePerson {
     id: string

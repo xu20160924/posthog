@@ -42,8 +42,6 @@ import {
     RawClickHouseEvent,
     RawGroup,
     RawOrganization,
-    RawPerson,
-    RawPersonValues,
     RawSessionRecordingEvent,
     Team,
     TeamId,
@@ -131,6 +129,22 @@ export type GroupId = [GroupTypeIndex, GroupKey]
 export interface CachedGroupData {
     properties: Properties
     created_at: ClickHouseTimestamp
+}
+
+interface RawPersonValues {
+    team_id: number
+    properties: Properties
+    is_user_id: number | null
+    is_identified: boolean
+    uuid: string
+    properties_last_updated_at: PropertiesLastUpdatedAt
+    properties_last_operation: PropertiesLastOperation | null
+    created_at: string
+}
+
+interface RawPerson extends RawPersonValues {
+    readonly id: number
+    readonly version: string | null
 }
 
 export const POSTGRES_UNAVAILABLE_ERROR_MESSAGES = [
