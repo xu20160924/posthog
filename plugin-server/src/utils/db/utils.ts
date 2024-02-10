@@ -106,7 +106,7 @@ export function generateKafkaPersonUpdateMessage(person: Person, isDeleted = 0):
                     team_id: person.team_id,
                     is_identified: person.is_identified,
                     is_deleted: isDeleted,
-                    version: person.version,
+                    version: person.version + (isDeleted ? 100 : 0), // keep in sync with delete_person in posthog/models/person/util.py
                 }),
             },
         ],

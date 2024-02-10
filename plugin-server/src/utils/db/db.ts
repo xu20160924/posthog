@@ -816,8 +816,6 @@ export class DB {
             [person.team_id, person.id],
             'deletePerson'
         )
-
-        // TODO: Number(result.rows[0].version || 0) + 100, // keep in sync with delete_person in posthog/models/person/util.py
         return deletedPersons.map((person) => generateKafkaPersonUpdateMessage(this.toPerson(person), 1))
     }
 
