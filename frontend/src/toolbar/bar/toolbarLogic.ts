@@ -12,7 +12,7 @@ import type { toolbarLogicType } from './toolbarLogicType'
 
 const MARGIN = 2
 
-export type MenuState = 'none' | 'heatmap' | 'actions' | 'flags' | 'inspect' | 'hedgehog'
+export type MenuState = 'none' | 'heatmap' | 'actions' | 'flags' | 'inspect' | 'hedgehog' | 'comments'
 
 export const toolbarLogic = kea<toolbarLogicType>([
     path(['toolbar', 'bar', 'toolbarLogic']),
@@ -174,6 +174,8 @@ export const toolbarLogic = kea<toolbarLogicType>([
                 actions.showButtonActions()
                 values.hedgehogActor?.setAnimation('action')
             } else if (visibleMenu === 'flags') {
+                values.hedgehogActor?.setAnimation('flag')
+            } else if (visibleMenu === 'comments') {
                 values.hedgehogActor?.setAnimation('flag')
             } else if (visibleMenu === 'inspect') {
                 actions.enableInspect()

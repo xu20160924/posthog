@@ -13,7 +13,7 @@ import {
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
 import { useKeyboardHotkeys } from 'lib/hooks/useKeyboardHotkeys'
-import { IconFlare, IconMenu, IconTarget } from 'lib/lemon-ui/icons'
+import { IconComment, IconFlare, IconMenu, IconTarget } from 'lib/lemon-ui/icons'
 import { LemonMenu, LemonMenuItems } from 'lib/lemon-ui/LemonMenu'
 import { useEffect, useRef } from 'react'
 
@@ -23,6 +23,7 @@ import { FlagsToolbarMenu } from '~/toolbar/flags/FlagsToolbarMenu'
 import { HeatmapToolbarMenu } from '~/toolbar/stats/HeatmapToolbarMenu'
 import { toolbarConfigLogic } from '~/toolbar/toolbarConfigLogic'
 
+import { CommentsToolbarMenu } from '../comments/CommentsToolbarMenu'
 import { HedgehogMenu } from '../hedgehog/HedgehogMenu'
 import { ToolbarButton } from './ToolbarButton'
 
@@ -88,6 +89,8 @@ export function ToolbarInfoMenu(): JSX.Element {
 
     const content = minimized ? null : visibleMenu === 'flags' ? (
         <FlagsToolbarMenu />
+    ) : visibleMenu === 'comments' ? (
+        <CommentsToolbarMenu />
     ) : visibleMenu === 'heatmap' ? (
         <HeatmapToolbarMenu />
     ) : visibleMenu === 'actions' ? (
@@ -186,6 +189,7 @@ export function Toolbar(): JSX.Element {
                         <ToolbarButton icon={<IconCursorClick />} menuId="heatmap" />
                         <ToolbarButton icon={<IconBolt />} menuId="actions" />
                         <ToolbarButton icon={<IconToggle />} menuId="flags" title="Feature flags" />
+                        <ToolbarButton icon={<IconComment />} menuId="comments" title="Comments" />
                     </>
                 ) : null}
 
