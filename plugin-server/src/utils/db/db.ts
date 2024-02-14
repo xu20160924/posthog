@@ -720,6 +720,60 @@ export class DB {
         return [person, person_distinct_ids]
     }
 
+    public async createPersonRobust(
+        createdAt: DateTime,
+        properties: Properties,
+        propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
+        propertiesLastOperation: PropertiesLastOperation,
+        teamId: number,
+        isUserId: number | null,
+        isIdentified: boolean,
+        uuid: string,
+        distinctIds: string[]
+    ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
+        return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
+            // XXX: Lots of duplication here!
+            const { rows } = await this.postgres.query<RawPerson>(
+                tx,
+                `
+                    INSERT INTO posthog_person (
+                        created_at, properties, properties_last_updated_at,
+                        properties_last_operation, team_id, is_user_id, is_identified, uuid, version
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
+                    RETURNING *
+                `,
+                [
+                    createdAt.toISO(),
+                    sanitizeJsonbValue(properties),
+                    sanitizeJsonbValue(propertiesLastUpdatedAt),
+                    sanitizeJsonbValue(propertiesLastOperation),
+                    teamId,
+                    isUserId,
+                    isIdentified,
+                    uuid,
+                ],
+                'insertPerson'
+            )
+            const row = rows[0]
+            const person = {
+                ...row,
+                created_at: DateTime.fromISO(row.created_at).toUTC(),
+                version: Number(row.version),
+            } as Person
+
+            const person_distinct_ids: ClickHousePersonDistinctId2[] = []
+            for (const distinctId of distinctIds) {
+                // TODO: `addDistinctIdPooled` needs to be updated to support
+                // INSERT ON CONFLICT, and preferably it would be able to handle
+                // a set of distinct IDs rather than just one at a time.
+                person_distinct_ids.push(await this.addDistinctIdPooled(teamId, distinctId, person, tx))
+            }
+
+            return [person, person_distinct_ids]
+        })
+    }
+
     public async createPerson(
         createdAt: DateTime,
         properties: Properties,
@@ -730,21 +784,48 @@ export class DB {
         isIdentified: boolean,
         uuid: string,
         distinctIds?: string[],
-        _tryFastPath?: boolean // TODO
+        tryFastPath?: boolean // TODO
     ): Promise<Person> {
         distinctIds ||= []
 
-        const [person, person_distinct_ids] = await this.createPersonOptimistic(
-            createdAt,
-            properties,
-            propertiesLastUpdatedAt,
-            propertiesLastOperation,
-            teamId,
-            isUserId,
-            isIdentified,
-            uuid,
-            distinctIds
-        )
+        let person: Person | undefined = undefined
+        let person_distinct_ids: ClickHousePersonDistinctId2[] = []
+
+        if (tryFastPath) {
+            try {
+                ;[person, person_distinct_ids] = await this.createPersonOptimistic(
+                    createdAt,
+                    properties,
+                    propertiesLastUpdatedAt,
+                    propertiesLastOperation,
+                    teamId,
+                    isUserId,
+                    isIdentified,
+                    uuid,
+                    distinctIds
+                )
+            } catch (err) {
+                throw err // TODO: Discriminate on whether or not this is recoverable.
+            }
+        }
+
+        if (person === undefined) {
+            ;[person, person_distinct_ids] = await this.createPersonRobust(
+                createdAt,
+                properties,
+                propertiesLastUpdatedAt,
+                propertiesLastOperation,
+                teamId,
+                isUserId,
+                isIdentified,
+                uuid,
+                distinctIds
+            )
+        }
+
+        if (person === undefined) {
+            throw new Error('failed to create person')
+        }
 
         await this.kafkaProducer.queueMessages([
             generateKafkaPersonUpdateMessage(
