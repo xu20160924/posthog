@@ -598,43 +598,34 @@ export class DB {
         }
     }
 
-    public async fetchPerson(
-        teamId: number,
-        distinctId: string,
-        options: { forUpdate?: boolean } = {}
-    ): Promise<Person | undefined> {
-        let queryString = `SELECT
-                posthog_person.id,
-                posthog_person.uuid,
-                posthog_person.created_at,
-                posthog_person.team_id,
-                posthog_person.properties,
-                posthog_person.properties_last_updated_at,
-                posthog_person.properties_last_operation,
-                posthog_person.is_user_id,
-                posthog_person.version,
-                posthog_person.is_identified
-            FROM posthog_person
-            JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
-            WHERE
-                posthog_person.team_id = $1
-                AND posthog_persondistinctid.team_id = $1
-                AND posthog_persondistinctid.distinct_id = $2`
-        if (options.forUpdate) {
-            // Locks the teamId and distinctId tied to this personId + this person's info
-            queryString = queryString.concat(` FOR UPDATE`)
-        }
-        const values = [teamId, distinctId]
-
-        const selectResult: QueryResult = await this.postgres.query<RawPerson>(
+    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
+        const { rows } = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
-            queryString,
-            values,
+            `
+                SELECT
+                    posthog_person.id,
+                    posthog_person.uuid,
+                    posthog_person.created_at,
+                    posthog_person.team_id,
+                    posthog_person.properties,
+                    posthog_person.properties_last_updated_at,
+                    posthog_person.properties_last_operation,
+                    posthog_person.is_user_id,
+                    posthog_person.version,
+                    posthog_person.is_identified
+                FROM posthog_person
+                JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
+                WHERE
+                    posthog_person.team_id = $1
+                    AND posthog_persondistinctid.team_id = $1
+                    AND posthog_persondistinctid.distinct_id = $2
+            `,
+            [teamId, distinctId],
             'fetchPerson'
         )
 
-        if (selectResult.rows.length > 0) {
-            const rawPerson = selectResult.rows[0]
+        if (rows.length > 0) {
+            const rawPerson = rows[0]
             return {
                 ...rawPerson,
                 created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
