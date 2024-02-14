@@ -599,10 +599,12 @@ export class DB {
     }
 
     public async fetchPerson(teamId: number, distinctId: string): Promise<[Person | undefined, boolean]> {
-        const { rows } = await this.postgres.query<RawPerson>(
+        type Row = ({ exists: true } & RawPerson) | ({ exists: false } & Partial<RawPerson>)
+        const { rows } = await this.postgres.query<Row>(
             PostgresUse.COMMON_WRITE,
             `
                 SELECT
+                    posthog_person.id IS NOT NULL as exists,
                     posthog_person.id,
                     posthog_person.uuid,
                     posthog_person.created_at,
@@ -614,30 +616,37 @@ export class DB {
                     posthog_person.version,
                     posthog_person.is_identified
                 FROM posthog_persondistinctid
-                LEFT OUTER JOIN posthog_person
-                    ON (posthog_persondistinctid.person_id = posthog_person.id)
+                LEFT OUTER JOIN posthog_person ON
+                    posthog_persondistinctid.team_id = posthog_person.team_id
+                    AND posthog_persondistinctid.person_id = posthog_person.id
                 WHERE
                     posthog_persondistinctid.team_id = $1
                     AND posthog_persondistinctid.distinct_id = $2
-                    AND posthog_person.team_id = $1
             `,
             [teamId, distinctId],
             'fetchPerson'
         )
 
-        if (rows.length > 0) {
-            const rawPerson = rows[0]
-            return [
-                {
-                    ...rawPerson,
-                    created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-                    version: Number(rawPerson.version || 0),
-                },
-                true,
-            ]
+        if (rows.length == 0) {
+            return [undefined, false]
+        } else if (rows.length == 1) {
+            const [row] = rows
+            if (row.exists) {
+                const { exists: _, ...rawPerson } = row
+                return [
+                    {
+                        ...rawPerson,
+                        created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
+                        version: Number(rawPerson.version || 0),
+                    },
+                    true,
+                ]
+            } else {
+                return [undefined, true]
+            }
+        } else {
+            throw new Error(`unexpected number of rows returned`)
         }
-
-        return [undefined, false]
     }
 
     public async createPerson(

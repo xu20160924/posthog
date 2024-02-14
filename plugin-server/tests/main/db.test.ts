@@ -464,7 +464,7 @@ describe('DB', () => {
     })
 
     describe('fetchPerson()', () => {
-        it('returns undefined if person does not exist', async () => {
+        it('returns undefined person if person and distinct id do not exist', async () => {
             const team = await getFirstTeam(hub)
             const [person, distinctIdExists] = await hub.db.fetchPerson(team.id, 'some_id')
 
@@ -472,7 +472,7 @@ describe('DB', () => {
             expect(distinctIdExists).toEqual(false)
         })
 
-        it('returns person object if person exists', async () => {
+        it('returns person object if distinct id and person do exist', async () => {
             const team = await getFirstTeam(hub)
             const uuid = new UUIDT().toString()
             const createdPerson = await db.createPerson(TIMESTAMP, { foo: 'bar' }, {}, {}, team.id, null, true, uuid, [
