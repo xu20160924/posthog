@@ -871,26 +871,36 @@ export class DB {
     }
 
     public async addDistinctId(person: Person, distinctId: string): Promise<void> {
-        const kafkaMessages = await this.addDistinctIdPooled(person, distinctId)
+        const kafkaMessages = await this.addDistinctIdPooled(person.team_id, distinctId, person)
         if (kafkaMessages.length) {
             await this.kafkaProducer.queueMessages(kafkaMessages)
         }
     }
 
     public async addDistinctIdPooled(
-        person: Person,
+        teamId: number,
         distinctId: string,
+        person: Person | undefined,
         tx?: TransactionClient
     ): Promise<ProducerRecord[]> {
-        const insertResult = await this.postgres.query(
+        if (person !== undefined && teamId != person.team_id) {
+            throw new Error('teamId and person.team_id must match')
+        }
+
+        const { rows } = await this.postgres.query<PersonDistinctId>(
             tx ?? PostgresUse.COMMON_WRITE,
             // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in `createPerson`
-            'INSERT INTO posthog_persondistinctid (distinct_id, person_id, team_id, version) VALUES ($1, $2, $3, 0) RETURNING *',
-            [distinctId, person.id, person.team_id],
+            `
+                INSERT INTO posthog_persondistinctid
+                    (team_id, distinct_id, person_id, version)
+                    VALUES ($1, $2, $3, 0)
+                RETURNING *
+            `,
+            [teamId, distinctId, person?.id],
             'addDistinctIdPooled'
         )
 
-        const { id, version: versionStr, ...personDistinctIdCreated } = insertResult.rows[0] as PersonDistinctId
+        const { id, version: versionStr, ...personDistinctIdCreated } = rows[0]
         const version = Number(versionStr || 0)
         const messages = [
             {
@@ -900,7 +910,7 @@ export class DB {
                         value: JSON.stringify({
                             ...personDistinctIdCreated,
                             version,
-                            person_id: person.uuid,
+                            person_id: person ? person.uuid : '00000000-0000-0000-0000-000000000000',
                             is_deleted: 0,
                         }),
                     },
