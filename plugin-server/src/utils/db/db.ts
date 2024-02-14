@@ -649,7 +649,7 @@ export class DB {
         }
     }
 
-    public async createPerson(
+    public async createPersonOptimistic(
         createdAt: DateTime,
         properties: Properties,
         propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
@@ -658,11 +658,8 @@ export class DB {
         isUserId: number | null,
         isIdentified: boolean,
         uuid: string,
-        distinctIds?: string[],
-        _tryFastPath?: boolean // TODO
-    ): Promise<Person> {
-        distinctIds ||= []
-
+        distinctIds: string[]
+    ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
         const { rows } = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
             `WITH inserted_person AS (
@@ -709,7 +706,47 @@ export class DB {
             version: Number(row.version),
         } as Person
 
-        const kafkaMessages = [
+        const person_distinct_ids = distinctIds.map(
+            (distinctId) =>
+                ({
+                    team_id: person.team_id,
+                    distinct_id: distinctId,
+                    person_id: person.uuid,
+                    version: 0, // XXX: implicit
+                    is_deleted: 0,
+                } as ClickHousePersonDistinctId2)
+        )
+
+        return [person, person_distinct_ids]
+    }
+
+    public async createPerson(
+        createdAt: DateTime,
+        properties: Properties,
+        propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
+        propertiesLastOperation: PropertiesLastOperation,
+        teamId: number,
+        isUserId: number | null,
+        isIdentified: boolean,
+        uuid: string,
+        distinctIds?: string[],
+        _tryFastPath?: boolean // TODO
+    ): Promise<Person> {
+        distinctIds ||= []
+
+        const [person, person_distinct_ids] = await this.createPersonOptimistic(
+            createdAt,
+            properties,
+            propertiesLastUpdatedAt,
+            propertiesLastOperation,
+            teamId,
+            isUserId,
+            isIdentified,
+            uuid,
+            distinctIds
+        )
+
+        await this.kafkaProducer.queueMessages([
             generateKafkaPersonUpdateMessage(
                 person.created_at,
                 person.properties,
@@ -718,26 +755,12 @@ export class DB {
                 person.uuid,
                 person.version
             ),
-        ]
-
-        for (const distinctId of distinctIds) {
-            kafkaMessages.push({
+            ...person_distinct_ids.map((pdi) => ({
                 topic: KAFKA_PERSON_DISTINCT_ID,
-                messages: [
-                    {
-                        value: JSON.stringify({
-                            team_id: person.team_id,
-                            distinct_id: distinctId,
-                            person_id: person.uuid,
-                            version: 0, // XXX: implicit
-                            is_deleted: 0,
-                        }),
-                    },
-                ],
-            })
-        }
+                messages: [{ value: JSON.stringify(pdi) }],
+            })),
+        ])
 
-        await this.kafkaProducer.queueMessages(kafkaMessages)
         return person
     }
 
