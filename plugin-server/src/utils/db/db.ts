@@ -662,7 +662,6 @@ export class DB {
         _tryFastPath?: boolean // TODO
     ): Promise<Person> {
         distinctIds ||= []
-        const version = 0 // We're creating the person now!
 
         const { rows } = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
@@ -671,7 +670,7 @@ export class DB {
                         created_at, properties, properties_last_updated_at,
                         properties_last_operation, team_id, is_user_id, is_identified, uuid, version
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
                     RETURNING *
                 )` +
                 distinctIds
@@ -680,7 +679,7 @@ export class DB {
                         // `addDistinctIdPooled`
                         (_, index) => `, distinct_id_${index} AS (
                         INSERT INTO posthog_persondistinctid (distinct_id, person_id, team_id, version)
-                        VALUES ($${10 + index}, (SELECT id FROM inserted_person), $5, $9))`
+                        VALUES ($${9 + index}, (SELECT id FROM inserted_person), $5, 0))`
                     )
                     .join('') +
                 `SELECT * FROM inserted_person;`,
@@ -693,7 +692,6 @@ export class DB {
                 isUserId,
                 isIdentified,
                 uuid,
-                version,
                 // The copy and reverse here is to maintain compatability with pre-existing code
                 // and tests. Postgres appears to assign IDs in reverse order of the INSERTs in the
                 // CTEs above, so we need to reverse the distinctIds to match the old behavior where
@@ -708,11 +706,11 @@ export class DB {
         const person = {
             ...row,
             created_at: DateTime.fromISO(row.created_at).toUTC(),
-            version,
+            version: Number(row.version),
         } as Person
 
         const kafkaMessages = [
-            generateKafkaPersonUpdateMessage(createdAt, properties, teamId, isIdentified, uuid, version),
+            generateKafkaPersonUpdateMessage(createdAt, properties, teamId, isIdentified, uuid, person.version),
         ]
 
         for (const distinctId of distinctIds) {
@@ -724,7 +722,7 @@ export class DB {
                             person_id: person.uuid,
                             team_id: teamId,
                             distinct_id: distinctId,
-                            version,
+                            version: 0, // XXX: implicit
                             is_deleted: 0,
                         }),
                     },
