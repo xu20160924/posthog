@@ -710,7 +710,14 @@ export class DB {
         } as Person
 
         const kafkaMessages = [
-            generateKafkaPersonUpdateMessage(createdAt, properties, teamId, isIdentified, uuid, person.version),
+            generateKafkaPersonUpdateMessage(
+                person.created_at,
+                person.properties,
+                person.team_id,
+                person.is_identified,
+                person.uuid,
+                person.version
+            ),
         ]
 
         for (const distinctId of distinctIds) {
@@ -719,9 +726,9 @@ export class DB {
                 messages: [
                     {
                         value: JSON.stringify({
-                            person_id: person.uuid,
-                            team_id: teamId,
+                            team_id: person.team_id,
                             distinct_id: distinctId,
+                            person_id: person.uuid,
                             version: 0, // XXX: implicit
                             is_deleted: 0,
                         }),
