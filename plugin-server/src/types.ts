@@ -772,7 +772,7 @@ export interface ClickhouseGroup {
 export interface PersonDistinctId {
     id: number
     team_id: number
-    person_id: number
+    person_id: number | null
     distinct_id: string
     version: string | null
 }

@@ -901,18 +901,23 @@ export class DB {
     }
 
     public async addDistinctId(person: Person, distinctId: string): Promise<void> {
-        const kafkaMessages = await this.addDistinctIdPooled(person.team_id, distinctId, person)
-        if (kafkaMessages.length) {
-            await this.kafkaProducer.queueMessages(kafkaMessages)
-        }
+        const record = await this.addDistinctIdPooled(person.team_id, distinctId, person)
+        await this.kafkaProducer.queueMessages([
+            {
+                topic: KAFKA_PERSON_DISTINCT_ID,
+                messages: [{ value: JSON.stringify(record) }],
+            },
+        ])
     }
 
     public async addDistinctIdPooled(
+        // TODO: should be private
         teamId: number,
         distinctId: string,
         person: Person | undefined,
         tx?: TransactionClient
-    ): Promise<ProducerRecord[]> {
+    ): Promise<ClickHousePersonDistinctId2> {
+        // XXX: weird return type!
         if (person !== undefined && teamId != person.team_id) {
             throw new Error('teamId and person.team_id must match')
         }
@@ -930,25 +935,15 @@ export class DB {
             'addDistinctIdPooled'
         )
 
-        const { id, version: versionStr, ...personDistinctIdCreated } = rows[0]
-        const version = Number(versionStr || 0)
-        const messages = [
-            {
-                topic: KAFKA_PERSON_DISTINCT_ID,
-                messages: [
-                    {
-                        value: JSON.stringify({
-                            ...personDistinctIdCreated,
-                            version,
-                            person_id: person ? person.uuid : '00000000-0000-0000-0000-000000000000',
-                            is_deleted: 0,
-                        }),
-                    },
-                ],
-            },
-        ]
-
-        return messages
+        // TODO: This should assert the number of rows!
+        const row = rows[0]
+        return {
+            team_id: row.team_id,
+            person_id: person ? person.uuid : '00000000-0000-0000-0000-000000000000',
+            distinct_id: row.distinct_id,
+            is_deleted: person ? 0 : 1,
+            version: Number(row.version),
+        }
     }
 
     public async moveDistinctIds(source: Person, target: Person, tx?: TransactionClient): Promise<ProducerRecord[]> {
