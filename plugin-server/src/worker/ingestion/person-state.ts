@@ -152,7 +152,7 @@ export class PersonState {
      * @returns [Person, boolean that indicates if properties were already handled or not]
      */
     private async createOrGetPerson(): Promise<[Person, boolean]> {
-        const [fetchedPerson, _distinctIdExists] = await this.db.fetchPerson(this.teamId, this.distinctId)
+        const [fetchedPerson, distinctIdExists] = await this.db.fetchPerson(this.teamId, this.distinctId)
         if (fetchedPerson) {
             return [fetchedPerson, false]
         }
@@ -169,7 +169,8 @@ export class PersonState {
             this.updateIsIdentified,
             this.newUuid,
             this.event.uuid,
-            [this.distinctId]
+            [this.distinctId],
+            !distinctIdExists
         )
         return [createdPerson, true]
     }
@@ -183,7 +184,8 @@ export class PersonState {
         isIdentified: boolean,
         uuid: string,
         creatorEventUuid: string,
-        distinctIds?: string[]
+        distinctIds?: string[],
+        tryFastPath?: boolean
     ): Promise<Person> {
         const props = { ...propertiesOnce, ...properties, ...{ $creator_event_uuid: creatorEventUuid } }
         const propertiesLastOperation: Record<string, any> = {}
@@ -206,7 +208,8 @@ export class PersonState {
             isUserId,
             isIdentified,
             uuid,
-            distinctIds
+            distinctIds,
+            tryFastPath
         )
     }
 
@@ -352,8 +355,8 @@ export class PersonState {
     ): Promise<Person> {
         this.updateIsIdentified = true
 
-        const [otherPerson, _otherDistinctIdExists] = await this.db.fetchPerson(teamId, otherPersonDistinctId)
-        const [mergeIntoPerson, _mergeIntoDistinctIdExists] = await this.db.fetchPerson(teamId, mergeIntoDistinctId)
+        const [otherPerson, otherDistinctIdExists] = await this.db.fetchPerson(teamId, otherPersonDistinctId)
+        const [mergeIntoPerson, mergeIntoDistinctIdExists] = await this.db.fetchPerson(teamId, mergeIntoDistinctId)
 
         if (otherPerson && !mergeIntoPerson) {
             await this.db.addDistinctId(otherPerson, mergeIntoDistinctId)
@@ -383,7 +386,8 @@ export class PersonState {
             true,
             this.newUuid,
             this.event.uuid,
-            [mergeIntoDistinctId, otherPersonDistinctId]
+            [mergeIntoDistinctId, otherPersonDistinctId],
+            !otherDistinctIdExists && !mergeIntoDistinctIdExists
         )
     }
 

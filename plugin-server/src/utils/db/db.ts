@@ -658,7 +658,8 @@ export class DB {
         isUserId: number | null,
         isIdentified: boolean,
         uuid: string,
-        distinctIds?: string[]
+        distinctIds?: string[],
+        _tryFastPath?: boolean // TODO
     ): Promise<Person> {
         distinctIds ||= []
         const version = 0 // We're creating the person now!
