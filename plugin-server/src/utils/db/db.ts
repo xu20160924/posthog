@@ -613,12 +613,13 @@ export class DB {
                     posthog_person.is_user_id,
                     posthog_person.version,
                     posthog_person.is_identified
-                FROM posthog_person
-                JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
+                FROM posthog_persondistinctid
+                LEFT OUTER JOIN posthog_person
+                    ON (posthog_persondistinctid.person_id = posthog_person.id)
                 WHERE
-                    posthog_person.team_id = $1
-                    AND posthog_persondistinctid.team_id = $1
+                    posthog_persondistinctid.team_id = $1
                     AND posthog_persondistinctid.distinct_id = $2
+                    AND posthog_person.team_id = $1
             `,
             [teamId, distinctId],
             'fetchPerson'
