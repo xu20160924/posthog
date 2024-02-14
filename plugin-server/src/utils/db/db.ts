@@ -598,7 +598,7 @@ export class DB {
         }
     }
 
-    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
+    public async fetchPerson(teamId: number, distinctId: string): Promise<[Person | undefined, boolean]> {
         const { rows } = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
             `
@@ -626,12 +626,17 @@ export class DB {
 
         if (rows.length > 0) {
             const rawPerson = rows[0]
-            return {
-                ...rawPerson,
-                created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-                version: Number(rawPerson.version || 0),
-            }
+            return [
+                {
+                    ...rawPerson,
+                    created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
+                    version: Number(rawPerson.version || 0),
+                },
+                true,
+            ]
         }
+
+        return [undefined, false]
     }
 
     public async createPerson(

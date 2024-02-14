@@ -152,14 +152,14 @@ export class PersonState {
      * @returns [Person, boolean that indicates if properties were already handled or not]
      */
     private async createOrGetPerson(): Promise<[Person, boolean]> {
-        let person = await this.db.fetchPerson(this.teamId, this.distinctId)
-        if (person) {
-            return [person, false]
+        const [fetchedPerson, _distinctIdExists] = await this.db.fetchPerson(this.teamId, this.distinctId)
+        if (fetchedPerson) {
+            return [fetchedPerson, false]
         }
 
         const properties = this.eventProperties['$set'] || {}
         const propertiesOnce = this.eventProperties['$set_once'] || {}
-        person = await this.createPerson(
+        const createdPerson = await this.createPerson(
             this.timestamp,
             properties || {},
             propertiesOnce || {},
@@ -171,7 +171,7 @@ export class PersonState {
             this.event.uuid,
             [this.distinctId]
         )
-        return [person, true]
+        return [createdPerson, true]
     }
 
     private async createPerson(
@@ -352,8 +352,8 @@ export class PersonState {
     ): Promise<Person> {
         this.updateIsIdentified = true
 
-        const otherPerson = await this.db.fetchPerson(teamId, otherPersonDistinctId)
-        const mergeIntoPerson = await this.db.fetchPerson(teamId, mergeIntoDistinctId)
+        const [otherPerson, _otherDistinctIdExists] = await this.db.fetchPerson(teamId, otherPersonDistinctId)
+        const [mergeIntoPerson, _mergeIntoDistinctIdExists] = await this.db.fetchPerson(teamId, mergeIntoDistinctId)
 
         if (otherPerson && !mergeIntoPerson) {
             await this.db.addDistinctId(otherPerson, mergeIntoDistinctId)

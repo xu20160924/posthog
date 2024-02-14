@@ -466,9 +466,10 @@ describe('DB', () => {
     describe('fetchPerson()', () => {
         it('returns undefined if person does not exist', async () => {
             const team = await getFirstTeam(hub)
-            const person = await hub.db.fetchPerson(team.id, 'some_id')
+            const [person, distinctIdExists] = await hub.db.fetchPerson(team.id, 'some_id')
 
             expect(person).toEqual(undefined)
+            expect(distinctIdExists).toEqual(false)
         })
 
         it('returns person object if person exists', async () => {
@@ -478,7 +479,7 @@ describe('DB', () => {
                 'some_id',
             ])
 
-            const person = await db.fetchPerson(team.id, 'some_id')
+            const [person, distinctIdExists] = await db.fetchPerson(team.id, 'some_id')
 
             expect(person).toEqual(createdPerson)
             expect(person).toEqual(
@@ -491,6 +492,7 @@ describe('DB', () => {
                     version: 0,
                 })
             )
+            expect(distinctIdExists).toEqual(true)
         })
     })
 
