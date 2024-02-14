@@ -472,6 +472,16 @@ describe('DB', () => {
             expect(distinctIdExists).toEqual(false)
         })
 
+        it('returns undefined person if person does not exist but distinct id does', async () => {
+            const team = await getFirstTeam(hub)
+            const distinctId = 'some_id'
+            await hub.db.addDistinctIdPooled(team.id, distinctId, undefined)
+
+            const [person, distinctIdExists] = await hub.db.fetchPerson(team.id, distinctId)
+            expect(person).toEqual(undefined)
+            expect(distinctIdExists).toEqual(true)
+        })
+
         it('returns person object if distinct id and person do exist', async () => {
             const team = await getFirstTeam(hub)
             const uuid = new UUIDT().toString()
