@@ -772,10 +772,12 @@ export class DB {
             return []
         }
 
-        // TODO: It also might make sense to exclude this same person ID from
-        // the UPDATE -- but then we're going to need to find a way to
-        // disambiguate between rows that were excluded because they were
-        // already claimed by this person, versus rows that could not be claimed
+        // XXX: This assumes that the provided ``Person`` has been newly created
+        // and does not have any distinct IDs associated with them yet. To make
+        // this more general, it would might make sense to return a row for each
+        // input that was associated with the person at the end of the
+        // statement, and a column that indicates whether or not it was updated
+        // and should have a message published to Kafka to reflect its state.
         const parameters = [person.team_id, person.id]
         const { rows } = await this.postgres.query<PersonDistinctId>(
             tx,
