@@ -746,24 +746,61 @@ export class DB {
         return [person, person_distinct_ids]
     }
 
+    private async tryClaimDistinctIds(
+        person: Person,
+        distinctIds: string[],
+        tx: TransactionClient
+    ): Promise<ClickHousePersonDistinctId2[]> {
+        if (distinctIds.length == 0) {
+            // Nothing to do, and we'd try to build an invalid INSERT query with
+            // an empty VALUES list.
+            return []
+        }
+
+        const parameters = [person.team_id, person.id]
+        const { rows } = await this.postgres.query<PersonDistinctId>(
+            tx,
+            `
+                INSERT INTO posthog_persondistinctid AS pdi
+                    (team_id, distinct_id, person_id, version)
+                    VALUES ${distinctIds.map((_, i) => `($1, $${parameters.length + 1 + i}, $2, 0)`).join(', ')}
+                ON CONFLICT (team_id, distinct_id)
+                    DO UPDATE SET
+                        person_id = excluded.person_id,
+                        version = COALESCE(pdi.version, 0)::numeric + 1
+                    WHERE pdi.person_id IS NULL
+                RETURNING *
+            `,
+            [...parameters, ...distinctIds],
+            'tryClaimDistinctIds'
+        )
+        if (rows.length != distinctIds.length) {
+            throw new Error('failed to claim all requested distinct ids') // TODO: better error, we know which failed
+        }
+        return rows.map(
+            (row) =>
+                ({
+                    team_id: row.team_id,
+                    distinct_id: row.distinct_id,
+                    person_id: person.uuid, // TODO: should verify we read what we expected
+                    version: Number(row.version),
+                    is_deleted: 0,
+                } as ClickHousePersonDistinctId2)
+        )
+    }
+
     private async createPersonForDistinctIdsTransactional(
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
+        // TODO: Log a warning or something if there are no distinct IDs passed
+        // here, since this function is going to be slower than necessary.
         return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
             const person = await this.postgres
                 .query<RawPerson>(tx, insertPersonQuery.getQuery(), insertPersonQuery.parameters, 'insertPerson')
                 .then(insertPersonQuery.getPersonFromResult)
 
-            const person_distinct_ids: ClickHousePersonDistinctId2[] = []
-            for (const distinctId of distinctIds) {
-                // TODO: `addDistinctIdPooled` needs to be updated to support
-                // INSERT ON CONFLICT, and preferably it would be able to handle
-                // a set of distinct IDs rather than just one at a time.
-                person_distinct_ids.push(
-                    await this.addDistinctIdPooled(insertPersonQuery.teamId, distinctId, person, tx)
-                )
-            }
+            const person_distinct_ids = await this.tryClaimDistinctIds(person, distinctIds, tx)
 
             return [person, person_distinct_ids]
         })
@@ -797,7 +834,7 @@ export class DB {
         let person: Person | undefined = undefined
         let person_distinct_ids: ClickHousePersonDistinctId2[] = []
 
-        if (tryFastPath) {
+        if (tryFastPath || (tryFastPath === undefined && distinctIds.length == 0)) {
             try {
                 ;[person, person_distinct_ids] = await this.createPersonForDistinctIdsOptimistic(
                     insertPersonQuery,
