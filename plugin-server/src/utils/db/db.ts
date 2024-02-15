@@ -598,6 +598,14 @@ export class DB {
         }
     }
 
+    private toPerson(rawPerson: RawPerson): Person {
+        return {
+            ...rawPerson,
+            created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
+            version: Number(rawPerson.version || 0),
+        }
+    }
+
     public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
         const query = {
             text: `
@@ -640,7 +648,7 @@ export class DB {
                 version: row[4],
             } as PersonDistinctId,
             person: row[5]
-                ? ({
+                ? this.toPerson({
                       id: row[5],
                       uuid: row[6],
                       created_at: row[7],
@@ -655,14 +663,7 @@ export class DB {
                 : undefined,
         }))
 
-        if (rows.length > 0) {
-            const rawPerson = rows[0].person
-            return {
-                ...rawPerson,
-                created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-                version: Number(rawPerson.version || 0),
-            }
-        }
+        return rows[0]?.person
     }
 
     public async createPerson(
