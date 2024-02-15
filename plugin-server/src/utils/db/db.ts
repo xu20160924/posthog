@@ -1008,13 +1008,13 @@ export class DB {
                 )
             ).data as ClickHousePersonDistinctId2[]
         } else if (database === Database.Postgres) {
-            const result = await this.postgres.query(
+            const result = await this.postgres.query<PersonDistinctId>(
                 PostgresUse.COMMON_WRITE, // used in tests only
                 'SELECT * FROM posthog_persondistinctid WHERE person_id=$1 AND team_id=$2 ORDER BY id',
                 [person.id, person.team_id],
                 'fetchDistinctIds'
             )
-            return result.rows as PersonDistinctId[]
+            return result.rows
         } else {
             throw new Error(`Can't fetch persons for database: ${database}`)
         }

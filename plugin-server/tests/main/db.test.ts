@@ -2,7 +2,15 @@ import { DateTime } from 'luxon'
 import { Pool } from 'pg'
 
 import { defaultConfig } from '../../src/config/config'
-import { ClickHouseTimestamp, Hub, Person, PropertyOperator, PropertyUpdateOperation, Team } from '../../src/types'
+import {
+    ClickHouseTimestamp,
+    Database,
+    Hub,
+    Person,
+    PropertyOperator,
+    PropertyUpdateOperation,
+    Team,
+} from '../../src/types'
 import { DB, DistinctIdClaimFailure, GroupId } from '../../src/utils/db/db'
 import { DependencyUnavailableError } from '../../src/utils/db/error'
 import { createHub } from '../../src/utils/db/hub'
@@ -369,21 +377,27 @@ describe('DB', () => {
             })
 
             test('does not claim existing distinct id associated with a person', async () => {
-                await createPerson([distinctId])
+                const otherPerson = await createPerson([distinctId])
                 await expect(createPerson([distinctId])).rejects.toThrow(
                     new DistinctIdClaimFailure(new Set([distinctId]), new Set([]))
                 )
+                expect(
+                    (await db.fetchDistinctIds(otherPerson, Database.Postgres)).map((row) => row.distinct_id)
+                ).toEqual([distinctId])
             })
 
             test('does not claim any distinct ids if only a partial set are unassigned', async () => {
                 const claimedIds = [...Array(3)].map((_, i) => `claimed/${i}`)
-                await createPerson(claimedIds)
+                const otherPerson = await createPerson(claimedIds)
 
                 const availableIds = [...Array(2)].map((_, i) => `available/${i}`)
                 const tryIds = [...claimedIds, ...availableIds]
                 await expect(createPerson(tryIds)).rejects.toThrow(
                     new DistinctIdClaimFailure(new Set(tryIds), new Set(availableIds))
                 )
+                expect(
+                    new Set((await db.fetchDistinctIds(otherPerson, Database.Postgres)).map((row) => row.distinct_id))
+                ).toEqual(new Set(claimedIds))
             })
         })
     })
