@@ -599,29 +599,33 @@ export class DB {
     }
 
     public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
-        const queryString = `SELECT
-                posthog_person.id,
-                posthog_person.uuid,
-                posthog_person.created_at,
-                posthog_person.team_id,
-                posthog_person.properties,
-                posthog_person.properties_last_updated_at,
-                posthog_person.properties_last_operation,
-                posthog_person.is_user_id,
-                posthog_person.version,
-                posthog_person.is_identified
-            FROM posthog_person
-            JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
-            WHERE
-                posthog_person.team_id = $1
-                AND posthog_persondistinctid.team_id = $1
-                AND posthog_persondistinctid.distinct_id = $2`
-        const values = [teamId, distinctId]
+        const query = {
+            text: `
+                SELECT
+                    posthog_person.id,
+                    posthog_person.uuid,
+                    posthog_person.created_at,
+                    posthog_person.team_id,
+                    posthog_person.properties,
+                    posthog_person.properties_last_updated_at,
+                    posthog_person.properties_last_operation,
+                    posthog_person.is_user_id,
+                    posthog_person.version,
+                    posthog_person.is_identified
+                FROM posthog_person
+                JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
+                WHERE
+                    posthog_person.team_id = $1
+                    AND posthog_persondistinctid.team_id = $1
+                    AND posthog_persondistinctid.distinct_id = $2
+                `,
+            values: [teamId, distinctId],
+        }
 
         const selectResult: QueryResult = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
-            queryString,
-            values,
+            query,
+            undefined,
             'fetchPerson'
         )
 
