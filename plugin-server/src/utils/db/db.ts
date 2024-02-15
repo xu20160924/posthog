@@ -697,7 +697,7 @@ export class DB {
         }
     }
 
-    public async createPersonForDistinctIdsOptimistic(
+    private async createPersonForDistinctIdsOptimistic(
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
@@ -746,7 +746,7 @@ export class DB {
         return [person, person_distinct_ids]
     }
 
-    public async createPersonForDistinctIdsTransactional(
+    private async createPersonForDistinctIdsTransactional(
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
