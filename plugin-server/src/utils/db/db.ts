@@ -706,8 +706,7 @@ export class DB {
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
-        // XXX: should not assume that $1 is going to be team_id
-        const parameterValues = insertPersonQuery.values
+        const values = insertPersonQuery.values
         const person = await this.postgres
             .query<RawPerson>(
                 PostgresUse.COMMON_WRITE,
@@ -721,7 +720,7 @@ export class DB {
                                 (team_id, distinct_id, person_id, version)
                                 VALUES (
                                     ${insertPersonQuery.getPlaceholder('team_id')},
-                                    $${parameterValues.length + 1 + index},
+                                    $${values.length + 1 + index},
                                     (SELECT id FROM inserted_person),
                                     0
                                 ))`
@@ -735,7 +734,7 @@ export class DB {
                     // we would do a round trip for each INSERT. We shouldn't actually depend on the
                     // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
                     // the same and prove behavior is the same as before.
-                    ...parameterValues,
+                    ...values,
                     ...distinctIds.slice().reverse(),
                 ],
                 'insertPerson'
