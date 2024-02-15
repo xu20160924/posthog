@@ -598,12 +598,8 @@ export class DB {
         }
     }
 
-    public async fetchPerson(
-        teamId: number,
-        distinctId: string,
-        options: { forUpdate?: boolean } = {}
-    ): Promise<Person | undefined> {
-        let queryString = `SELECT
+    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
+        const queryString = `SELECT
                 posthog_person.id,
                 posthog_person.uuid,
                 posthog_person.created_at,
@@ -620,10 +616,6 @@ export class DB {
                 posthog_person.team_id = $1
                 AND posthog_persondistinctid.team_id = $1
                 AND posthog_persondistinctid.distinct_id = $2`
-        if (options.forUpdate) {
-            // Locks the teamId and distinctId tied to this personId + this person's info
-            queryString = queryString.concat(` FOR UPDATE`)
-        }
         const values = [teamId, distinctId]
 
         const selectResult: QueryResult = await this.postgres.query<RawPerson>(
