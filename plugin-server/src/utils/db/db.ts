@@ -149,34 +149,34 @@ class InsertPersonQuery {
     public readonly parameters: any[]
 
     constructor(
+        public teamId: number,
         private createdAt: DateTime,
         private properties: Properties,
         private propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
         private propertiesLastOperation: PropertiesLastOperation,
-        public teamId: number,
         private isUserId: number | null,
         private isIdentified: boolean,
         private uuid: string
     ) {
         this.parameters = [
+            this.teamId, // XXX: assumed to always be at $1
             this.createdAt.toISO(),
             sanitizeJsonbValue(this.properties),
             sanitizeJsonbValue(this.propertiesLastUpdatedAt),
             sanitizeJsonbValue(this.propertiesLastOperation),
-            this.teamId,
             this.isUserId,
             this.isIdentified,
             this.uuid,
         ]
     }
 
-    public getQuery(start = 1): string {
+    public getQuery(): string {
         return `
             INSERT INTO posthog_person (
-                created_at, properties, properties_last_updated_at,
-                properties_last_operation, team_id, is_user_id, is_identified, uuid, version
+                team_id, created_at, properties, properties_last_updated_at,
+                properties_last_operation, is_user_id, is_identified, uuid, version
             )
-            VALUES (${this.parameters.map((_, i) => `$${start + i}`).join(', ')}, 0)
+            VALUES (${this.parameters.map((_, i) => `$${1 + i}`).join(', ')}, 0)
             RETURNING *
         `
     }
@@ -701,12 +701,11 @@ export class DB {
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
-        const parameters = [insertPersonQuery.teamId, ...insertPersonQuery.parameters]
-
+        // XXX: should not assume that $1 is going to be team_id
         const person = await this.postgres
             .query<RawPerson>(
                 PostgresUse.COMMON_WRITE,
-                `WITH inserted_person AS (${insertPersonQuery.getQuery(2)})` +
+                `WITH inserted_person AS (${insertPersonQuery.getQuery()})` +
                     distinctIds
                         .map(
                             // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
@@ -714,7 +713,9 @@ export class DB {
                             (_, index) => `, distinct_id_${index} AS (
                         INSERT INTO posthog_persondistinctid
                             (team_id, distinct_id, person_id, version)
-                            VALUES ($1, $${parameters.length + 1 + index}, (SELECT id FROM inserted_person), 0))`
+                            VALUES ($1, $${
+                                insertPersonQuery.parameters.length + 1 + index
+                            }, (SELECT id FROM inserted_person), 0))`
                         )
                         .join('') +
                     `SELECT * FROM inserted_person`,
@@ -725,7 +726,7 @@ export class DB {
                     // we would do a round trip for each INSERT. We shouldn't actually depend on the
                     // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
                     // the same and prove behavior is the same as before.
-                    ...parameters,
+                    ...insertPersonQuery.parameters,
                     ...distinctIds.slice().reverse(),
                 ],
                 'insertPerson'
@@ -821,11 +822,11 @@ export class DB {
         distinctIds ||= []
 
         const insertPersonQuery = new InsertPersonQuery(
+            teamId,
             createdAt,
             properties,
             propertiesLastUpdatedAt,
             propertiesLastOperation,
-            teamId,
             isUserId,
             isIdentified,
             uuid
