@@ -602,22 +602,28 @@ export class DB {
         const query = {
             text: `
                 SELECT
-                    posthog_person.id,
-                    posthog_person.uuid,
-                    posthog_person.created_at,
-                    posthog_person.team_id,
-                    posthog_person.properties,
-                    posthog_person.properties_last_updated_at,
-                    posthog_person.properties_last_operation,
-                    posthog_person.is_user_id,
-                    posthog_person.version,
-                    posthog_person.is_identified
-                FROM posthog_person
-                JOIN posthog_persondistinctid ON (posthog_persondistinctid.person_id = posthog_person.id)
+                    pdi.id,
+                    pdi.team_id,
+                    pdi.person_id,
+                    pdi.distinct_id,
+                    pdi.version,
+                    person.id,
+                    person.uuid,
+                    person.created_at,
+                    person.team_id,
+                    person.properties,
+                    person.properties_last_updated_at,
+                    person.properties_last_operation,
+                    person.is_user_id,
+                    person.version,
+                    person.is_identified
+                FROM posthog_persondistinctid pdi
+                LEFT OUTER JOIN posthog_person person ON
+                    pdi.team_id = person.team_id
+                    AND pdi.person_id = person.id
                 WHERE
-                    posthog_person.team_id = $1
-                    AND posthog_persondistinctid.team_id = $1
-                    AND posthog_persondistinctid.distinct_id = $2
+                    pdi.team_id = $1
+                    AND pdi.distinct_id = $2
                 `,
             values: [teamId, distinctId],
             rowMode: 'array',
@@ -625,24 +631,32 @@ export class DB {
 
         const rows = (
             await this.postgres.query<any[]>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
-        ).rows.map(
-            (row) =>
-                ({
-                    id: row[0],
-                    uuid: row[1],
-                    created_at: row[2],
-                    team_id: row[3],
-                    properties: row[4],
-                    properties_last_updated_at: row[5],
-                    properties_last_operation: row[6],
-                    is_user_id: row[7],
-                    version: row[8],
-                    is_identified: row[9],
-                } as RawPerson)
-        )
+        ).rows.map((row) => ({
+            distinct_id: {
+                id: row[0],
+                team_id: row[1],
+                person_id: row[2],
+                distinct_id: row[3],
+                version: row[4],
+            } as PersonDistinctId,
+            person: row[5]
+                ? ({
+                      id: row[5],
+                      uuid: row[6],
+                      created_at: row[7],
+                      team_id: row[8],
+                      properties: row[9],
+                      properties_last_updated_at: row[10],
+                      properties_last_operation: row[11],
+                      is_user_id: row[12],
+                      version: row[13],
+                      is_identified: row[14],
+                  } as RawPerson)
+                : undefined,
+        }))
 
         if (rows.length > 0) {
-            const rawPerson = rows[0]
+            const rawPerson = rows[0].person
             return {
                 ...rawPerson,
                 created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),

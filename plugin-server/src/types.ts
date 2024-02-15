@@ -774,7 +774,7 @@ export interface PersonDistinctId {
     team_id: number
     person_id: number
     distinct_id: string
-    version: string | null
+    version: string | null // XXX: not consistent with `Person.version`
 }
 
 /** ClickHouse PersonDistinctId model. (person_distinct_id2 table) */
