@@ -758,6 +758,10 @@ export class DB {
             return []
         }
 
+        // TODO: It also might make sense to exclude this same person ID from
+        // the UPDATE -- but then we're going to need to find a way to
+        // disambiguate between rows that were excluded because they were
+        // already claimed by this person, versus rows that could not be claimed
         const parameters = [person.team_id, person.id]
         const { rows } = await this.postgres.query<PersonDistinctId>(
             tx,
