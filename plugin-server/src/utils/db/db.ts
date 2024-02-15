@@ -145,6 +145,54 @@ export const POSTGRES_UNAVAILABLE_ERROR_MESSAGES = [
     'query_wait_timeout', // Waiting on PG bouncer to give us a slot
 ]
 
+class InsertPersonQuery {
+    public readonly parameters: any[]
+
+    constructor(
+        private createdAt: DateTime,
+        private properties: Properties,
+        private propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
+        private propertiesLastOperation: PropertiesLastOperation,
+        public teamId: number,
+        private isUserId: number | null,
+        private isIdentified: boolean,
+        private uuid: string
+    ) {
+        this.parameters = [
+            this.createdAt.toISO(),
+            sanitizeJsonbValue(this.properties),
+            sanitizeJsonbValue(this.propertiesLastUpdatedAt),
+            sanitizeJsonbValue(this.propertiesLastOperation),
+            this.teamId,
+            this.isUserId,
+            this.isIdentified,
+            this.uuid,
+        ]
+    }
+
+    public getQuery(start = 1): string {
+        return `
+            INSERT INTO posthog_person (
+                created_at, properties, properties_last_updated_at,
+                properties_last_operation, team_id, is_user_id, is_identified, uuid, version
+            )
+            VALUES (${this.parameters.map((_, i) => `$${start + i}`).join(', ')}, 0)
+            RETURNING *
+        `
+    }
+
+    public getPersonFromResult(result: QueryResult<RawPerson>): Person {
+        const { rows } = result
+        const row = rows[0]
+        const person = {
+            ...row,
+            created_at: DateTime.fromISO(row.created_at).toUTC(),
+            version: Number(row.version),
+        } as Person
+        return person
+    }
+}
+
 /** The recommended way of accessing the database. */
 export class DB {
     /** Postgres connection router for database access. */
@@ -649,62 +697,40 @@ export class DB {
         }
     }
 
-    public async createPersonOptimistic(
-        createdAt: DateTime,
-        properties: Properties,
-        propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
-        propertiesLastOperation: PropertiesLastOperation,
-        teamId: number,
-        isUserId: number | null,
-        isIdentified: boolean,
-        uuid: string,
+    public async createPersonForDistinctIdsOptimistic(
+        insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
-        const { rows } = await this.postgres.query<RawPerson>(
-            PostgresUse.COMMON_WRITE,
-            `WITH inserted_person AS (
-                    INSERT INTO posthog_person (
-                        created_at, properties, properties_last_updated_at,
-                        properties_last_operation, team_id, is_user_id, is_identified, uuid, version
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
-                    RETURNING *
-                )` +
-                distinctIds
-                    .map(
-                        // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
-                        // `addDistinctIdPooled`
-                        (_, index) => `, distinct_id_${index} AS (
-                        INSERT INTO posthog_persondistinctid (distinct_id, person_id, team_id, version)
-                        VALUES ($${9 + index}, (SELECT id FROM inserted_person), $5, 0))`
-                    )
-                    .join('') +
-                `SELECT * FROM inserted_person;`,
-            [
-                createdAt.toISO(),
-                sanitizeJsonbValue(properties),
-                sanitizeJsonbValue(propertiesLastUpdatedAt),
-                sanitizeJsonbValue(propertiesLastOperation),
-                teamId,
-                isUserId,
-                isIdentified,
-                uuid,
-                // The copy and reverse here is to maintain compatability with pre-existing code
-                // and tests. Postgres appears to assign IDs in reverse order of the INSERTs in the
-                // CTEs above, so we need to reverse the distinctIds to match the old behavior where
-                // we would do a round trip for each INSERT. We shouldn't actually depend on the
-                // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
-                // the same and prove behavior is the same as before.
-                ...distinctIds.slice().reverse(),
-            ],
-            'insertPerson'
-        )
-        const row = rows[0]
-        const person = {
-            ...row,
-            created_at: DateTime.fromISO(row.created_at).toUTC(),
-            version: Number(row.version),
-        } as Person
+        const parameters = [insertPersonQuery.teamId, ...insertPersonQuery.parameters]
+
+        const person = await this.postgres
+            .query<RawPerson>(
+                PostgresUse.COMMON_WRITE,
+                `WITH inserted_person AS (${insertPersonQuery.getQuery(2)})` +
+                    distinctIds
+                        .map(
+                            // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
+                            // `addDistinctIdPooled`
+                            (_, index) => `, distinct_id_${index} AS (
+                        INSERT INTO posthog_persondistinctid
+                            (team_id, distinct_id, person_id, version)
+                            VALUES ($1, $${parameters.length + 1 + index}, (SELECT id FROM inserted_person), 0))`
+                        )
+                        .join('') +
+                    `SELECT * FROM inserted_person`,
+                [
+                    // The copy and reverse here is to maintain compatability with pre-existing code
+                    // and tests. Postgres appears to assign IDs in reverse order of the INSERTs in the
+                    // CTEs above, so we need to reverse the distinctIds to match the old behavior where
+                    // we would do a round trip for each INSERT. We shouldn't actually depend on the
+                    // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
+                    // the same and prove behavior is the same as before.
+                    ...parameters,
+                    ...distinctIds.slice().reverse(),
+                ],
+                'insertPerson'
+            )
+            .then(insertPersonQuery.getPersonFromResult)
 
         const person_distinct_ids = distinctIds.map(
             (distinctId) =>
@@ -720,54 +746,23 @@ export class DB {
         return [person, person_distinct_ids]
     }
 
-    public async createPersonRobust(
-        createdAt: DateTime,
-        properties: Properties,
-        propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
-        propertiesLastOperation: PropertiesLastOperation,
-        teamId: number,
-        isUserId: number | null,
-        isIdentified: boolean,
-        uuid: string,
+    public async createPersonForDistinctIdsTransactional(
+        insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
         return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
-            // XXX: Lots of duplication here!
-            const { rows } = await this.postgres.query<RawPerson>(
-                tx,
-                `
-                    INSERT INTO posthog_person (
-                        created_at, properties, properties_last_updated_at,
-                        properties_last_operation, team_id, is_user_id, is_identified, uuid, version
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0)
-                    RETURNING *
-                `,
-                [
-                    createdAt.toISO(),
-                    sanitizeJsonbValue(properties),
-                    sanitizeJsonbValue(propertiesLastUpdatedAt),
-                    sanitizeJsonbValue(propertiesLastOperation),
-                    teamId,
-                    isUserId,
-                    isIdentified,
-                    uuid,
-                ],
-                'insertPerson'
-            )
-            const row = rows[0]
-            const person = {
-                ...row,
-                created_at: DateTime.fromISO(row.created_at).toUTC(),
-                version: Number(row.version),
-            } as Person
+            const person = await this.postgres
+                .query<RawPerson>(tx, insertPersonQuery.getQuery(), insertPersonQuery.parameters, 'insertPerson')
+                .then(insertPersonQuery.getPersonFromResult)
 
             const person_distinct_ids: ClickHousePersonDistinctId2[] = []
             for (const distinctId of distinctIds) {
                 // TODO: `addDistinctIdPooled` needs to be updated to support
                 // INSERT ON CONFLICT, and preferably it would be able to handle
                 // a set of distinct IDs rather than just one at a time.
-                person_distinct_ids.push(await this.addDistinctIdPooled(teamId, distinctId, person, tx))
+                person_distinct_ids.push(
+                    await this.addDistinctIdPooled(insertPersonQuery.teamId, distinctId, person, tx)
+                )
             }
 
             return [person, person_distinct_ids]
@@ -788,20 +783,24 @@ export class DB {
     ): Promise<Person> {
         distinctIds ||= []
 
+        const insertPersonQuery = new InsertPersonQuery(
+            createdAt,
+            properties,
+            propertiesLastUpdatedAt,
+            propertiesLastOperation,
+            teamId,
+            isUserId,
+            isIdentified,
+            uuid
+        )
+
         let person: Person | undefined = undefined
         let person_distinct_ids: ClickHousePersonDistinctId2[] = []
 
         if (tryFastPath) {
             try {
-                ;[person, person_distinct_ids] = await this.createPersonOptimistic(
-                    createdAt,
-                    properties,
-                    propertiesLastUpdatedAt,
-                    propertiesLastOperation,
-                    teamId,
-                    isUserId,
-                    isIdentified,
-                    uuid,
+                ;[person, person_distinct_ids] = await this.createPersonForDistinctIdsOptimistic(
+                    insertPersonQuery,
                     distinctIds
                 )
             } catch (err) {
@@ -810,15 +809,8 @@ export class DB {
         }
 
         if (person === undefined) {
-            ;[person, person_distinct_ids] = await this.createPersonRobust(
-                createdAt,
-                properties,
-                propertiesLastUpdatedAt,
-                propertiesLastOperation,
-                teamId,
-                isUserId,
-                isIdentified,
-                uuid,
+            ;[person, person_distinct_ids] = await this.createPersonForDistinctIdsTransactional(
+                insertPersonQuery,
                 distinctIds
             )
         }
