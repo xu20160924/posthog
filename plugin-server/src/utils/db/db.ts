@@ -5,7 +5,7 @@ import { Pool as GenericPool } from 'generic-pool'
 import Redis from 'ioredis'
 import { ProducerRecord } from 'kafkajs'
 import { DateTime } from 'luxon'
-import { QueryResult } from 'pg'
+import { QueryConfig, QueryResult } from 'pg'
 
 import { CELERY_DEFAULT_QUEUE } from '../../config/constants'
 import { KAFKA_GROUPS, KAFKA_PERSON_DISTINCT_ID, KAFKA_PLUGIN_LOG_ENTRIES } from '../../config/kafka-topics'
@@ -152,7 +152,7 @@ export class DistinctIdClaimFailure extends Error {
     }
 }
 
-class InsertPersonQuery {
+class InsertPersonQuery implements QueryConfig<any[]> {
     private parameters: Record<string, any>
 
     constructor(values: PersonValues) {
@@ -168,11 +168,7 @@ class InsertPersonQuery {
         }
     }
 
-    public getPlaceholder(key: string): string {
-        return `$${Object.keys(this.parameters).indexOf(key) + 1}`
-    }
-
-    public getQuery(): string {
+    get text(): string {
         return `
             INSERT INTO posthog_person (${Object.keys(this.parameters).join(', ')}, version)
             VALUES (${Object.values(this.parameters)
@@ -182,8 +178,12 @@ class InsertPersonQuery {
         `
     }
 
-    public getParameterValues(): any[] {
+    get values(): any[] {
         return Object.values(this.parameters)
+    }
+
+    public getPlaceholder(key: string): string {
+        return `$${Object.keys(this.parameters).indexOf(key) + 1}`
     }
 
     public getPersonFromResult(result: QueryResult<RawPerson>): Person {
@@ -707,11 +707,11 @@ export class DB {
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
         // XXX: should not assume that $1 is going to be team_id
-        const parameterValues = insertPersonQuery.getParameterValues()
+        const parameterValues = insertPersonQuery.values
         const person = await this.postgres
             .query<RawPerson>(
                 PostgresUse.COMMON_WRITE,
-                `WITH inserted_person AS (${insertPersonQuery.getQuery()})` +
+                `WITH inserted_person AS (${insertPersonQuery.text})` +
                     distinctIds
                         .map(
                             // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
@@ -735,7 +735,7 @@ export class DB {
                     // we would do a round trip for each INSERT. We shouldn't actually depend on the
                     // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
                     // the same and prove behavior is the same as before.
-                    ...insertPersonQuery.getParameterValues(),
+                    ...parameterValues,
                     ...distinctIds.slice().reverse(),
                 ],
                 'insertPerson'
@@ -812,12 +812,7 @@ export class DB {
         // here, since this function is going to be slower than necessary.
         return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
             const person = await this.postgres
-                .query<RawPerson>(
-                    tx,
-                    insertPersonQuery.getQuery(),
-                    insertPersonQuery.getParameterValues(),
-                    'insertPerson'
-                )
+                .query<RawPerson>(tx, insertPersonQuery, undefined, 'insertPerson')
                 .then(insertPersonQuery.getPersonFromResult)
 
             const person_distinct_ids = await this.tryClaimDistinctIds(person, distinctIds, tx)
