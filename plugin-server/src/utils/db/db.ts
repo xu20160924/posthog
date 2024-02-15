@@ -620,9 +620,26 @@ export class DB {
                     AND posthog_persondistinctid.distinct_id = $2
                 `,
             values: [teamId, distinctId],
+            rowMode: 'array',
         }
 
-        const { rows } = await this.postgres.query<RawPerson>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
+        const rows = (
+            await this.postgres.query<any[]>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
+        ).rows.map(
+            (row) =>
+                ({
+                    id: row[0],
+                    uuid: row[1],
+                    created_at: row[2],
+                    team_id: row[3],
+                    properties: row[4],
+                    properties_last_updated_at: row[5],
+                    properties_last_operation: row[6],
+                    is_user_id: row[7],
+                    version: row[8],
+                    is_identified: row[9],
+                } as RawPerson)
+        )
 
         if (rows.length > 0) {
             const rawPerson = rows[0]
