@@ -3,7 +3,7 @@ import { Pool } from 'pg'
 
 import { defaultConfig } from '../../src/config/config'
 import { ClickHouseTimestamp, Hub, Person, PropertyOperator, PropertyUpdateOperation, Team } from '../../src/types'
-import { DB, GroupId } from '../../src/utils/db/db'
+import { DB, DistinctIdClaimFailure, GroupId } from '../../src/utils/db/db'
 import { DependencyUnavailableError } from '../../src/utils/db/error'
 import { createHub } from '../../src/utils/db/hub'
 import * as dbMetrics from '../../src/utils/db/metrics'
@@ -337,6 +337,54 @@ describe('DB', () => {
             })
             expect(fetched_person!.uuid).toEqual(uuid)
             expect(fetched_person!.team_id).toEqual(team.id)
+        })
+
+        describe.each([true, false])('using fast path: %s', (tryFastPath) => {
+            const createPerson = async (distinctIds: string[]) => {
+                return await db.createPerson(
+                    TIMESTAMP,
+                    {},
+                    {},
+                    {},
+                    team.id,
+                    null,
+                    false,
+                    new UUIDT().toString(),
+                    distinctIds,
+                    tryFastPath
+                )
+            }
+
+            test('successfully claims existing distinct id not associated with a person', async () => {
+                await db.addDistinctIdPooled(team.id, distinctId, undefined)
+                await expect(createPerson([distinctId])).resolves.toBeDefined()
+            })
+
+            test('successfully claims multiple existing distinct ids not associated with a person', async () => {
+                const distinctIds = [...Array(5)].map((_, i) => `d/${i}`)
+                for (const distinctId of distinctIds) {
+                    await db.addDistinctIdPooled(team.id, distinctId, undefined)
+                }
+                await expect(createPerson([distinctId])).resolves.toBeDefined()
+            })
+
+            test('does not claim existing distinct id associated with a person', async () => {
+                await createPerson([distinctId])
+                await expect(createPerson([distinctId])).rejects.toThrow(
+                    new DistinctIdClaimFailure(new Set([distinctId]), new Set([]))
+                )
+            })
+
+            test('does not claim any distinct ids if only a partial set are unassigned', async () => {
+                const claimedIds = [...Array(3)].map((_, i) => `claimed/${i}`)
+                await createPerson(claimedIds)
+
+                const availableIds = [...Array(2)].map((_, i) => `available/${i}`)
+                const tryIds = [...claimedIds, ...availableIds]
+                await expect(createPerson(tryIds)).rejects.toThrow(
+                    new DistinctIdClaimFailure(new Set(tryIds), new Set(availableIds))
+                )
+            })
         })
     })
 

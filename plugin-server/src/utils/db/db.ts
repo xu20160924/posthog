@@ -145,6 +145,12 @@ export const POSTGRES_UNAVAILABLE_ERROR_MESSAGES = [
     'query_wait_timeout', // Waiting on PG bouncer to give us a slot
 ]
 
+export class DistinctIdClaimFailure extends Error {
+    constructor(public readonly attempted: Set<string>, public readonly succeeded: Set<string>) {
+        super(`failed to claim ${attempted.size - succeeded.size}/${attempted.size} distinct ids`)
+    }
+}
+
 class InsertPersonQuery {
     public readonly parameters: any[]
 
@@ -780,7 +786,8 @@ export class DB {
             'tryClaimDistinctIds'
         )
         if (rows.length != distinctIds.length) {
-            throw new Error('failed to claim all requested distinct ids') // TODO: better error, we know which failed
+            // XXX: We should probably use Set everywhere, actually
+            throw new DistinctIdClaimFailure(new Set(distinctIds), new Set(rows.map((row) => row.distinct_id)))
         }
         return rows.map(
             (row) =>
@@ -846,7 +853,10 @@ export class DB {
                     distinctIds
                 )
             } catch (err) {
-                throw err // TODO: Discriminate on whether or not this is recoverable.
+                // errors due to constraint validation can be retried
+                if (!(err.code == '23505' && err.constraint == 'unique distinct_id for team')) {
+                    throw err
+                }
             }
         }
 
