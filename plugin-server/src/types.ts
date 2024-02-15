@@ -704,7 +704,7 @@ export interface BasePerson {
     id: number
     team_id: number
     properties: Properties
-    is_user_id: number
+    is_user_id: number | null
     is_identified: boolean
     uuid: string
     properties_last_updated_at: PropertiesLastUpdatedAt
@@ -722,6 +722,8 @@ export interface Person extends BasePerson {
     created_at: DateTime
     version: number
 }
+
+export type PersonValues = Omit<Person, 'id' | 'version'>
 
 /** Clickhouse Person model. */
 export interface ClickHousePerson {

@@ -29,6 +29,7 @@ import {
     OrganizationMembershipLevel,
     Person,
     PersonDistinctId,
+    PersonValues,
     Plugin,
     PluginConfig,
     PluginLogEntry,
@@ -152,39 +153,37 @@ export class DistinctIdClaimFailure extends Error {
 }
 
 class InsertPersonQuery {
-    public readonly parameters: any[]
+    private parameters: Record<string, any>
 
-    constructor(
-        public teamId: number,
-        private createdAt: DateTime,
-        private properties: Properties,
-        private propertiesLastUpdatedAt: PropertiesLastUpdatedAt,
-        private propertiesLastOperation: PropertiesLastOperation,
-        private isUserId: number | null,
-        private isIdentified: boolean,
-        private uuid: string
-    ) {
-        this.parameters = [
-            this.teamId, // XXX: assumed to always be at $1
-            this.createdAt.toISO(),
-            sanitizeJsonbValue(this.properties),
-            sanitizeJsonbValue(this.propertiesLastUpdatedAt),
-            sanitizeJsonbValue(this.propertiesLastOperation),
-            this.isUserId,
-            this.isIdentified,
-            this.uuid,
-        ]
+    constructor(values: PersonValues) {
+        this.parameters = {
+            team_id: values.team_id,
+            created_at: values.created_at.toISO(),
+            properties: sanitizeJsonbValue(values.properties),
+            is_user_id: values.is_user_id,
+            is_identified: values.is_identified,
+            uuid: values.uuid,
+            properties_last_updated_at: sanitizeJsonbValue(values.properties_last_updated_at),
+            properties_last_operation: sanitizeJsonbValue(values.properties_last_operation),
+        }
+    }
+
+    public getPlaceholder(key: string): string {
+        return `$${Object.keys(this.parameters).indexOf(key) + 1}`
     }
 
     public getQuery(): string {
         return `
-            INSERT INTO posthog_person (
-                team_id, created_at, properties, properties_last_updated_at,
-                properties_last_operation, is_user_id, is_identified, uuid, version
-            )
-            VALUES (${this.parameters.map((_, i) => `$${1 + i}`).join(', ')}, 0)
+            INSERT INTO posthog_person (${Object.keys(this.parameters).join(', ')}, version)
+            VALUES (${Object.values(this.parameters)
+                .map((_, i) => `$${1 + i}`)
+                .join(', ')}, 0)
             RETURNING *
         `
+    }
+
+    public getParameterValues(): any[] {
+        return Object.values(this.parameters)
     }
 
     public getPersonFromResult(result: QueryResult<RawPerson>): Person {
@@ -708,6 +707,7 @@ export class DB {
         distinctIds: string[]
     ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
         // XXX: should not assume that $1 is going to be team_id
+        const parameterValues = insertPersonQuery.getParameterValues()
         const person = await this.postgres
             .query<RawPerson>(
                 PostgresUse.COMMON_WRITE,
@@ -717,11 +717,14 @@ export class DB {
                             // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
                             // `addDistinctIdPooled`
                             (_, index) => `, distinct_id_${index} AS (
-                        INSERT INTO posthog_persondistinctid
-                            (team_id, distinct_id, person_id, version)
-                            VALUES ($1, $${
-                                insertPersonQuery.parameters.length + 1 + index
-                            }, (SELECT id FROM inserted_person), 0))`
+                                INSERT INTO posthog_persondistinctid
+                                (team_id, distinct_id, person_id, version)
+                                VALUES (
+                                    ${insertPersonQuery.getPlaceholder('team_id')},
+                                    $${parameterValues.length + 1 + index},
+                                    (SELECT id FROM inserted_person),
+                                    0
+                                ))`
                         )
                         .join('') +
                     `SELECT * FROM inserted_person`,
@@ -732,7 +735,7 @@ export class DB {
                     // we would do a round trip for each INSERT. We shouldn't actually depend on the
                     // `id` column of distinct_ids, so this is just a simple way to keeps tests exactly
                     // the same and prove behavior is the same as before.
-                    ...insertPersonQuery.parameters,
+                    ...insertPersonQuery.getParameterValues(),
                     ...distinctIds.slice().reverse(),
                 ],
                 'insertPerson'
@@ -809,7 +812,12 @@ export class DB {
         // here, since this function is going to be slower than necessary.
         return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
             const person = await this.postgres
-                .query<RawPerson>(tx, insertPersonQuery.getQuery(), insertPersonQuery.parameters, 'insertPerson')
+                .query<RawPerson>(
+                    tx,
+                    insertPersonQuery.getQuery(),
+                    insertPersonQuery.getParameterValues(),
+                    'insertPerson'
+                )
                 .then(insertPersonQuery.getPersonFromResult)
 
             const person_distinct_ids = await this.tryClaimDistinctIds(person, distinctIds, tx)
@@ -832,16 +840,16 @@ export class DB {
     ): Promise<Person> {
         distinctIds ||= []
 
-        const insertPersonQuery = new InsertPersonQuery(
-            teamId,
-            createdAt,
-            properties,
-            propertiesLastUpdatedAt,
-            propertiesLastOperation,
-            isUserId,
-            isIdentified,
-            uuid
-        )
+        const insertPersonQuery = new InsertPersonQuery({
+            team_id: teamId,
+            created_at: createdAt,
+            properties: properties,
+            properties_last_updated_at: propertiesLastUpdatedAt,
+            properties_last_operation: propertiesLastOperation,
+            is_user_id: isUserId,
+            is_identified: isIdentified,
+            uuid: uuid,
+        })
 
         let person: Person | undefined = undefined
         let person_distinct_ids: ClickHousePersonDistinctId2[] = []
