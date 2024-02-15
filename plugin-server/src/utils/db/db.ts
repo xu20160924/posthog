@@ -199,6 +199,11 @@ class InsertPersonQuery implements QueryConfig<any[]> {
     }
 }
 
+type CreatePersonResult = {
+    person: Person
+    person_distinct_ids: ClickHousePersonDistinctId2[]
+}
+
 /** The recommended way of accessing the database. */
 export class DB {
     /** Postgres connection router for database access. */
@@ -706,7 +711,7 @@ export class DB {
     private async createPersonForDistinctIdsOptimistic(
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
-    ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
+    ): Promise<CreatePersonResult> {
         const values = insertPersonQuery.values
         const person = await this.postgres
             .query<RawPerson>(
@@ -753,7 +758,7 @@ export class DB {
                 } as ClickHousePersonDistinctId2)
         )
 
-        return [person, person_distinct_ids]
+        return { person, person_distinct_ids }
     }
 
     private async tryClaimDistinctIds(
@@ -807,7 +812,7 @@ export class DB {
     private async createPersonForDistinctIdsTransactional(
         insertPersonQuery: InsertPersonQuery,
         distinctIds: string[]
-    ): Promise<[Person, ClickHousePersonDistinctId2[]]> {
+    ): Promise<CreatePersonResult> {
         // TODO: Log a warning or something if there are no distinct IDs passed
         // here, since this function is going to be slower than necessary.
         return await this.postgres.transaction(PostgresUse.COMMON_WRITE, 'createPerson', async (tx) => {
@@ -817,7 +822,7 @@ export class DB {
 
             const person_distinct_ids = await this.tryClaimDistinctIds(person, distinctIds, tx)
 
-            return [person, person_distinct_ids]
+            return { person, person_distinct_ids }
         })
     }
 
@@ -846,15 +851,11 @@ export class DB {
             uuid: uuid,
         })
 
-        let person: Person | undefined = undefined
-        let person_distinct_ids: ClickHousePersonDistinctId2[] = []
+        let result: CreatePersonResult | undefined
 
         if (tryFastPath || (tryFastPath === undefined && distinctIds.length == 0)) {
             try {
-                ;[person, person_distinct_ids] = await this.createPersonForDistinctIdsOptimistic(
-                    insertPersonQuery,
-                    distinctIds
-                )
+                result = await this.createPersonForDistinctIdsOptimistic(insertPersonQuery, distinctIds)
             } catch (err) {
                 // errors due to constraint validation can be retried
                 if (!(err.code == '23505' && err.constraint == 'unique distinct_id for team')) {
@@ -863,33 +864,30 @@ export class DB {
             }
         }
 
-        if (person === undefined) {
-            ;[person, person_distinct_ids] = await this.createPersonForDistinctIdsTransactional(
-                insertPersonQuery,
-                distinctIds
-            )
+        if (result === undefined) {
+            result = await this.createPersonForDistinctIdsTransactional(insertPersonQuery, distinctIds)
         }
 
-        if (person === undefined) {
+        if (result === undefined) {
             throw new Error('failed to create person')
         }
 
         await this.kafkaProducer.queueMessages([
             generateKafkaPersonUpdateMessage(
-                person.created_at,
-                person.properties,
-                person.team_id,
-                person.is_identified,
-                person.uuid,
-                person.version
+                result.person.created_at,
+                result.person.properties,
+                result.person.team_id,
+                result.person.is_identified,
+                result.person.uuid,
+                result.person.version
             ),
-            ...person_distinct_ids.map((pdi) => ({
+            ...result.person_distinct_ids.map((pdi) => ({
                 topic: KAFKA_PERSON_DISTINCT_ID,
                 messages: [{ value: JSON.stringify(pdi) }],
             })),
         ])
 
-        return person
+        return result.person
     }
 
     // Currently in use, but there are various problems with this function
