@@ -764,6 +764,8 @@ export class DB {
         distinctIds: string[],
         tx?: TransactionClient
     ): Promise<ClickHousePersonDistinctId2[]> {
+        distinctIds = [...new Set(distinctIds)]
+
         if (distinctIds.length == 0) {
             // Nothing to do, and we'd try to build an invalid INSERT query with
             // an empty VALUES list.
@@ -797,7 +799,6 @@ export class DB {
             'tryClaimDistinctIds'
         )
         if (rows.length != distinctIds.length) {
-            // XXX: We should probably use Set everywhere, actually
             throw new DistinctIdClaimFailure(new Set(distinctIds), new Set(rows.map((row) => row.distinct_id)))
         }
         return rows.map(

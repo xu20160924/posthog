@@ -381,6 +381,11 @@ describe('DB', () => {
                 await expect(createPerson([distinctId])).resolves.toBeDefined()
             })
 
+            test('successfully claims distinct id with duplicated entry not associated with a person', async () => {
+                await insertDistinctId(team.id, distinctId, undefined)
+                await expect(createPerson([distinctId, distinctId])).resolves.toBeDefined()
+            })
+
             test('successfully claims multiple existing distinct ids not associated with a person', async () => {
                 const distinctIds = [...Array(5)].map((_, i) => `d/${i}`)
                 for (const distinctId of distinctIds) {
