@@ -606,7 +606,10 @@ export class DB {
         }
     }
 
-    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
+    public async fetchPersonsByDistinctIds(
+        teamId: number,
+        distinctIds: string[]
+    ): Promise<{ distinct_id: PersonDistinctId; person: Person | undefined }[]> {
         const query = {
             text: `
                 SELECT
@@ -631,23 +634,24 @@ export class DB {
                     AND pdi.person_id = person.id
                 WHERE
                     pdi.team_id = $1
-                    AND pdi.distinct_id = $2
+                    AND pdi.distinct_id IN (${distinctIds.map((_, i) => `$${i + 2}`).join(',')})
                 `,
-            values: [teamId, distinctId],
+            values: [teamId, ...distinctIds],
             rowMode: 'array',
         }
 
-        const rows = (
-            await this.postgres.query<any[]>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
-        ).rows.map((row) => ({
-            distinct_id: {
+        const result = await this.postgres.query<any[]>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
+
+        return result.rows.map((row) => {
+            const distinct_id = {
                 id: row[0],
                 team_id: row[1],
                 person_id: row[2],
                 distinct_id: row[3],
                 version: row[4],
-            } as PersonDistinctId,
-            person: row[5]
+            } as PersonDistinctId
+
+            const person = row[5]
                 ? this.toPerson({
                       id: row[5],
                       uuid: row[6],
@@ -660,10 +664,15 @@ export class DB {
                       version: row[13],
                       is_identified: row[14],
                   } as RawPerson)
-                : undefined,
-        }))
+                : undefined
 
-        return rows[0]?.person
+            return { distinct_id, person }
+        })
+    }
+
+    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
+        const results = await this.fetchPersonsByDistinctIds(teamId, [distinctId])
+        return results[0]?.person
     }
 
     public async createPerson(
