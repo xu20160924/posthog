@@ -29,7 +29,6 @@ import {
     OrganizationMembershipLevel,
     Person,
     PersonDistinctId,
-    PersonValues,
     Plugin,
     PluginConfig,
     PluginLogEntry,
@@ -151,6 +150,8 @@ export class DistinctIdClaimFailure extends Error {
         super(`failed to claim ${attempted.size - succeeded.size}/${attempted.size} distinct ids`)
     }
 }
+
+type PersonValues = Omit<Person, 'id' | 'version'>
 
 class InsertPersonQuery implements QueryConfig<any[]> {
     private parameters: Record<string, any>

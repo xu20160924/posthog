@@ -723,8 +723,6 @@ export interface Person extends BasePerson {
     version: number
 }
 
-export type PersonValues = Omit<Person, 'id' | 'version'>
-
 /** Clickhouse Person model. */
 export interface ClickHousePerson {
     id: string
