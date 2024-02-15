@@ -719,8 +719,6 @@ export class DB {
                 `WITH inserted_person AS (${insertPersonQuery.text})` +
                     distinctIds
                         .map(
-                            // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in
-                            // `addDistinctIdPooled`
                             (_, index) => `, distinct_id_${index} AS (
                                 INSERT INTO posthog_persondistinctid
                                 (team_id, distinct_id, person_id, version)
@@ -764,12 +762,15 @@ export class DB {
     private async tryClaimDistinctIds(
         person: Person,
         distinctIds: string[],
-        tx: TransactionClient
+        tx?: TransactionClient
     ): Promise<ClickHousePersonDistinctId2[]> {
         if (distinctIds.length == 0) {
             // Nothing to do, and we'd try to build an invalid INSERT query with
             // an empty VALUES list.
             return []
+        } else if (distinctIds.length > 1 && tx === undefined) {
+            // This isn't great: there's probably a better way to structure this.
+            throw new Error('multiple distinct id updates must be made within a transaction')
         }
 
         // XXX: This assumes that the provided ``Person`` has been newly created
@@ -780,7 +781,7 @@ export class DB {
         // and should have a message published to Kafka to reflect its state.
         const parameters = [person.team_id, person.id]
         const { rows } = await this.postgres.query<PersonDistinctId>(
-            tx,
+            tx ?? PostgresUse.COMMON_WRITE,
             `
                 INSERT INTO posthog_persondistinctid AS pdi
                     (team_id, distinct_id, person_id, version)
@@ -1029,49 +1030,13 @@ export class DB {
     }
 
     public async addDistinctId(person: Person, distinctId: string): Promise<void> {
-        const record = await this.addDistinctIdPooled(person.team_id, distinctId, person)
+        const [record] = await this.tryClaimDistinctIds(person, [distinctId])
         await this.kafkaProducer.queueMessages([
             {
                 topic: KAFKA_PERSON_DISTINCT_ID,
                 messages: [{ value: JSON.stringify(record) }],
             },
         ])
-    }
-
-    public async addDistinctIdPooled(
-        // TODO: should be private
-        teamId: number,
-        distinctId: string,
-        person: Person | undefined,
-        tx?: TransactionClient
-    ): Promise<ClickHousePersonDistinctId2> {
-        // XXX: weird return type!
-        if (person !== undefined && teamId != person.team_id) {
-            throw new Error('teamId and person.team_id must match')
-        }
-
-        const { rows } = await this.postgres.query<PersonDistinctId>(
-            tx ?? PostgresUse.COMMON_WRITE,
-            // NOTE: Keep this in sync with the posthog_persondistinctid INSERT in `createPerson`
-            `
-                INSERT INTO posthog_persondistinctid
-                    (team_id, distinct_id, person_id, version)
-                    VALUES ($1, $2, $3, 0)
-                RETURNING *
-            `,
-            [teamId, distinctId, person?.id],
-            'addDistinctIdPooled'
-        )
-
-        // TODO: This should assert the number of rows!
-        const row = rows[0]
-        return {
-            team_id: row.team_id,
-            person_id: person ? person.uuid : '00000000-0000-0000-0000-000000000000',
-            distinct_id: row.distinct_id,
-            is_deleted: person ? 0 : 1,
-            version: Number(row.version),
-        }
     }
 
     public async moveDistinctIds(source: Person, target: Person, tx?: TransactionClient): Promise<ProducerRecord[]> {

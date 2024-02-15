@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { Pool } from 'pg'
+import { Pool, QueryResultRow } from 'pg'
 
 import { defaultConfig } from '../../src/config/config'
 import {
@@ -7,6 +7,7 @@ import {
     Database,
     Hub,
     Person,
+    PersonDistinctId,
     PropertyOperator,
     PropertyUpdateOperation,
     Team,
@@ -51,8 +52,20 @@ describe('DB', () => {
         return db.redisGet(db.getGroupDataCacheKey(teamId, groupTypeIndex, groupKey), null, 'fetchGroupCache')
     }
 
-    function runPGQuery(queryString: string, values: any[] = null) {
-        return db.postgres.query(PostgresUse.COMMON_WRITE, queryString, values, 'testQuery')
+    function runPGQuery<T extends QueryResultRow = any>(queryString: string, values: any[] = []) {
+        return db.postgres.query<T>(PostgresUse.COMMON_WRITE, queryString, values, 'testQuery')
+    }
+
+    const insertDistinctId = async (teamId: number, distinctId: string, person_id: number | undefined) => {
+        return await runPGQuery<PersonDistinctId>(
+            `
+                INSERT INTO posthog_persondistinctid
+                    (team_id, distinct_id, person_id, version)
+                    VALUES ($1, $2, $3, 0)
+                RETURNING *
+            `,
+            [teamId, distinctId, person_id]
+        )
     }
 
     describe('fetchAllActionsGroupedByTeam() and fetchAction()', () => {
@@ -364,14 +377,14 @@ describe('DB', () => {
             }
 
             test('successfully claims existing distinct id not associated with a person', async () => {
-                await db.addDistinctIdPooled(team.id, distinctId, undefined)
+                await insertDistinctId(team.id, distinctId, undefined)
                 await expect(createPerson([distinctId])).resolves.toBeDefined()
             })
 
             test('successfully claims multiple existing distinct ids not associated with a person', async () => {
                 const distinctIds = [...Array(5)].map((_, i) => `d/${i}`)
                 for (const distinctId of distinctIds) {
-                    await db.addDistinctIdPooled(team.id, distinctId, undefined)
+                    await insertDistinctId(team.id, distinctId, undefined)
                 }
                 await expect(createPerson([distinctId])).resolves.toBeDefined()
             })
@@ -537,7 +550,7 @@ describe('DB', () => {
         it('returns undefined person if person does not exist but distinct id does', async () => {
             const team = await getFirstTeam(hub)
             const distinctId = 'some_id'
-            await hub.db.addDistinctIdPooled(team.id, distinctId, undefined)
+            await insertDistinctId(team.id, distinctId, undefined)
 
             const [person, distinctIdExists] = await hub.db.fetchPerson(team.id, distinctId)
             expect(person).toEqual(undefined)
