@@ -640,7 +640,12 @@ export class DB {
             rowMode: 'array',
         }
 
-        const result = await this.postgres.query<any[]>(PostgresUse.COMMON_WRITE, query, undefined, 'fetchPerson')
+        const result = await this.postgres.query<any[]>(
+            PostgresUse.COMMON_WRITE,
+            query,
+            undefined,
+            'fetchPersonsByDistinctIds'
+        )
 
         return result.rows.map((row) => {
             const distinct_id = {
