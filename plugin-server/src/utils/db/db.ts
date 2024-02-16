@@ -550,6 +550,14 @@ export class DB {
         }
     }
 
+    private toPerson(rawPerson: RawPerson): Person {
+        return {
+            ...rawPerson,
+            created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
+            version: Number(rawPerson.version || 0),
+        }
+    }
+
     public async fetchPersons(database?: Database.Postgres): Promise<Person[]>
     public async fetchPersons(database: Database.ClickHouse): Promise<ClickHousePerson[]>
     public async fetchPersons(database: Database = Database.Postgres): Promise<Person[] | ClickHousePerson[]> {
@@ -576,33 +584,11 @@ export class DB {
                 return rest
             }) as ClickHousePerson[]
         } else if (database === Database.Postgres) {
-            return (
-                (
-                    await this.postgres.query(
-                        PostgresUse.COMMON_WRITE,
-                        'SELECT * FROM posthog_person',
-                        undefined,
-                        'fetchPersons'
-                    )
-                ).rows as RawPerson[]
-            ).map(
-                (rawPerson: RawPerson) =>
-                    ({
-                        ...rawPerson,
-                        created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-                        version: Number(rawPerson.version || 0),
-                    } as Person)
-            )
+            return await this.postgres
+                .query<RawPerson>(PostgresUse.COMMON_WRITE, 'SELECT * FROM posthog_person', undefined, 'fetchPersons')
+                .then(({ rows }) => rows.map(this.toPerson))
         } else {
             throw new Error(`Can't fetch persons for database: ${database}`)
-        }
-    }
-
-    private toPerson(rawPerson: RawPerson): Person {
-        return {
-            ...rawPerson,
-            created_at: DateTime.fromISO(rawPerson.created_at).toUTC(),
-            version: Number(rawPerson.version || 0),
         }
     }
 
@@ -689,7 +675,7 @@ export class DB {
         distinctIds ||= []
         const version = 0 // We're creating the person now!
 
-        const insertResult = await this.postgres.query(
+        const { rows } = await this.postgres.query<RawPerson>(
             PostgresUse.COMMON_WRITE,
             `WITH inserted_person AS (
                     INSERT INTO posthog_person (
@@ -729,12 +715,7 @@ export class DB {
             ],
             'insertPerson'
         )
-        const personCreated = insertResult.rows[0] as RawPerson
-        const person = {
-            ...personCreated,
-            created_at: DateTime.fromISO(personCreated.created_at).toUTC(),
-            version,
-        } as Person
+        const person = this.toPerson(rows[0])
 
         const kafkaMessages: ProducerRecord[] = []
         kafkaMessages.push(generateKafkaPersonUpdateMessage(createdAt, properties, teamId, isIdentified, uuid, version))
@@ -783,23 +764,18 @@ export class DB {
         }
         RETURNING *`
 
-        const updateResult: QueryResult = await this.postgres.query(
+        const { rows } = await this.postgres.query<RawPerson>(
             tx ?? PostgresUse.COMMON_WRITE,
             queryString,
             values,
             'updatePerson'
         )
-        if (updateResult.rows.length == 0) {
+        if (rows.length == 0) {
             throw new NoRowsUpdatedError(
                 `Person with team_id="${person.team_id}" and uuid="${person.uuid} couldn't be updated`
             )
         }
-        const updatedPersonRaw = updateResult.rows[0] as RawPerson
-        const updatedPerson = {
-            ...updatedPersonRaw,
-            created_at: DateTime.fromISO(updatedPersonRaw.created_at).toUTC(),
-            version: Number(updatedPersonRaw.version || 0),
-        } as Person
+        const updatedPerson = this.toPerson(rows[0])
 
         // Track the disparity between the version on the database and the version of the person we have in memory
         // Without races, the returned person (updatedPerson) should have a version that's only +1 the person in memory
