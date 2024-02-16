@@ -675,11 +675,6 @@ export class DB {
         })
     }
 
-    public async fetchPerson(teamId: number, distinctId: string): Promise<Person | undefined> {
-        const results = await this.fetchPersonsByDistinctIds(teamId, [distinctId])
-        return results[0]?.person
-    }
-
     public async createPerson(
         createdAt: DateTime,
         properties: Properties,

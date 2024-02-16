@@ -463,22 +463,26 @@ describe('DB', () => {
         })
     })
 
-    describe('fetchPerson()', () => {
-        it('returns undefined if person does not exist', async () => {
+    describe('fetchPersonsByDistinctIds()', () => {
+        it('returns no results if person does not exist', async () => {
             const team = await getFirstTeam(hub)
-            const person = await hub.db.fetchPerson(team.id, 'some_id')
+            const results = await hub.db.fetchPersonsByDistinctIds(team.id, ['some_id'])
 
-            expect(person).toEqual(undefined)
+            expect(results).toHaveLength(0)
         })
 
-        it('returns person object if person exists', async () => {
+        it('returns result with person and distinct id instances if person exists', async () => {
             const team = await getFirstTeam(hub)
             const uuid = new UUIDT().toString()
+            const distinctId = 'some_id'
             const createdPerson = await db.createPerson(TIMESTAMP, { foo: 'bar' }, {}, {}, team.id, null, true, uuid, [
-                'some_id',
+                distinctId,
             ])
 
-            const person = await db.fetchPerson(team.id, 'some_id')
+            const results = await db.fetchPersonsByDistinctIds(team.id, [distinctId])
+            expect(results).toHaveLength(1)
+
+            const { person, distinct_id } = results[0]
 
             expect(person).toEqual(createdPerson)
             expect(person).toEqual(
@@ -489,6 +493,13 @@ describe('DB', () => {
                     is_identified: true,
                     created_at: TIMESTAMP,
                     version: 0,
+                })
+            )
+
+            expect(distinct_id).toEqual(
+                expect.objectContaining({
+                    person_id: person!.id,
+                    distinct_id: distinctId,
                 })
             )
         })

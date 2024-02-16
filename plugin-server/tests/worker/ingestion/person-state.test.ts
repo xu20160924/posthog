@@ -79,7 +79,7 @@ describe('PersonState.update()', () => {
 
         teamId = await createTeam(hub.db.postgres, organizationId)
 
-        jest.spyOn(hub.db, 'fetchPerson')
+        jest.spyOn(hub.db, 'fetchPersonsByDistinctIds')
         jest.spyOn(hub.db, 'updatePersonDeprecated')
 
         jest.useFakeTimers({ advanceTimers: 50 })
@@ -160,7 +160,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
             expect(hub.db.updatePersonDeprecated).not.toHaveBeenCalled()
 
             // verify Postgres persons
@@ -175,10 +175,6 @@ describe('PersonState.update()', () => {
 
         it('handles person being created in a race condition', async () => {
             await hub.db.createPerson(timestamp, {}, {}, {}, teamId, null, false, uuid.toString(), ['new-user'])
-
-            jest.spyOn(hub.db, 'fetchPerson').mockImplementationOnce(() => {
-                return Promise.resolve(undefined)
-            })
 
             const person = await personState({ event: '$pageview', distinct_id: 'new-user' }).handleUpdate()
             await hub.db.kafkaProducer.flush()
@@ -209,10 +205,6 @@ describe('PersonState.update()', () => {
             await hub.db.createPerson(timestamp, { b: 3, c: 4 }, {}, {}, teamId, null, false, uuid.toString(), [
                 'new-user',
             ])
-
-            jest.spyOn(hub.db, 'fetchPerson').mockImplementationOnce(() => {
-                return Promise.resolve(undefined)
-            })
 
             const person = await personState({
                 event: '$pageview',
@@ -268,7 +260,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
             expect(hub.db.updatePersonDeprecated).not.toHaveBeenCalled()
 
             // verify Postgres persons
@@ -318,7 +310,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
 
             // verify Postgres persons
             const persons = await fetchPostgresPersonsH()
@@ -362,7 +354,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(0)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(0)
 
             // verify Postgres persons
             const persons = await fetchPostgresPersonsH()
@@ -396,7 +388,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
             expect(hub.db.updatePersonDeprecated).not.toHaveBeenCalled()
 
             // verify Postgres persons
@@ -427,7 +419,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
             expect(hub.db.updatePersonDeprecated).toHaveBeenCalledTimes(1)
 
             // verify Postgres persons
@@ -482,7 +474,7 @@ describe('PersonState.update()', () => {
                 })
             )
 
-            expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1)
+            expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1)
             expect(hub.db.updatePersonDeprecated).toHaveBeenCalledTimes(2)
 
             // verify Postgres persons
@@ -1431,7 +1423,6 @@ describe('PersonState.update()', () => {
             ;[hub, closeHub] = await createHub({})
             overridesMode = PersonOverridesModes[useOverridesMode] // n.b. mutating outer scope here -- be careful
 
-            jest.spyOn(hub.db, 'fetchPerson')
             jest.spyOn(hub.db, 'updatePersonDeprecated')
         })
 

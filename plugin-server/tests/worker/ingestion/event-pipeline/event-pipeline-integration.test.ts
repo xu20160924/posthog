@@ -57,7 +57,7 @@ describe('Event Pipeline integration test', () => {
             hub.EXTERNAL_REQUEST_TIMEOUT_MS
         )
 
-        jest.spyOn(hub.db, 'fetchPerson')
+        jest.spyOn(hub.db, 'fetchPersonsByDistinctIds')
         jest.spyOn(hub.db, 'createPerson')
     })
 
@@ -257,11 +257,11 @@ describe('Event Pipeline integration test', () => {
 
         await new EventPipelineRunner(hub, event).runEventPipeline(event)
 
-        expect(hub.db.fetchPerson).toHaveBeenCalledTimes(1) // we query before creating
+        expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(1) // we query before creating
         expect(hub.db.createPerson).toHaveBeenCalledTimes(1)
 
         // second time single fetch
         await new EventPipelineRunner(hub, event).runEventPipeline(event)
-        expect(hub.db.fetchPerson).toHaveBeenCalledTimes(2)
+        expect(hub.db.fetchPersonsByDistinctIds).toHaveBeenCalledTimes(2)
     })
 })

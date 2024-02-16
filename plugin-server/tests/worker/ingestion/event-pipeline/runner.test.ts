@@ -87,7 +87,6 @@ describe('EventPipelineRunner', () => {
         hub = {
             db: {
                 kafkaProducer: { queueMessage: jest.fn() },
-                fetchPerson: jest.fn(),
             },
             eventsToDropByToken: createEventsToDropByToken('drop_token:drop_id,drop_token_all:*'),
         }
