@@ -176,6 +176,10 @@ describe('PersonState.update()', () => {
         it('handles person being created in a race condition', async () => {
             await hub.db.createPerson(timestamp, {}, {}, {}, teamId, null, false, uuid.toString(), ['new-user'])
 
+            jest.spyOn(hub.db, 'fetchPersonsByDistinctIds').mockImplementationOnce(() => {
+                return Promise.resolve([])
+            })
+
             const person = await personState({ event: '$pageview', distinct_id: 'new-user' }).handleUpdate()
             await hub.db.kafkaProducer.flush()
 
@@ -205,6 +209,10 @@ describe('PersonState.update()', () => {
             await hub.db.createPerson(timestamp, { b: 3, c: 4 }, {}, {}, teamId, null, false, uuid.toString(), [
                 'new-user',
             ])
+
+            jest.spyOn(hub.db, 'fetchPersonsByDistinctIds').mockImplementationOnce(() => {
+                return Promise.resolve([])
+            })
 
             const person = await personState({
                 event: '$pageview',
