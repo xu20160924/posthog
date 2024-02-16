@@ -152,26 +152,29 @@ export class PersonState {
      * @returns [Person, boolean that indicates if properties were already handled or not]
      */
     private async createOrGetPerson(): Promise<[Person, boolean]> {
-        let person = await this.db.fetchPerson(this.teamId, this.distinctId)
-        if (person) {
-            return [person, false]
+        const [result] = await this.db.fetchPersonsByDistinctIds(this.teamId, [this.distinctId])
+
+        if (result?.person) {
+            return [result.person, false]
         }
 
-        const properties = this.eventProperties['$set'] || {}
-        const propertiesOnce = this.eventProperties['$set_once'] || {}
-        person = await this.createPerson(
-            this.timestamp,
-            properties || {},
-            propertiesOnce || {},
-            this.teamId,
-            null,
-            // :NOTE: This should never be set in this branch, but adding this for logical consistency
-            this.updateIsIdentified,
-            this.newUuid,
-            this.event.uuid,
-            [this.distinctId]
-        )
-        return [person, true]
+        // TODO: Use distinct ID fetched above to hint whether or not we
+        // may be able to take the fast path during person creation.
+        return [
+            await this.createPerson(
+                this.timestamp,
+                this.eventProperties['$set'] || {},
+                this.eventProperties['$set_once'] || {},
+                this.teamId,
+                null,
+                // :NOTE: This should never be set in this branch, but adding this for logical consistency
+                this.updateIsIdentified,
+                this.newUuid,
+                this.event.uuid,
+                [this.distinctId]
+            ),
+            true,
+        ]
     }
 
     private async createPerson(
@@ -352,8 +355,17 @@ export class PersonState {
     ): Promise<Person> {
         this.updateIsIdentified = true
 
-        const otherPerson = await this.db.fetchPerson(teamId, otherPersonDistinctId)
-        const mergeIntoPerson = await this.db.fetchPerson(teamId, mergeIntoDistinctId)
+        const personsByDistinctId = await this.db
+            .fetchPersonsByDistinctIds(teamId, [otherPersonDistinctId, mergeIntoDistinctId])
+            .then((results) =>
+                results.reduce(
+                    (map, val) => map.set(val.distinct_id.distinct_id, val.person),
+                    new Map<string, Person | undefined>()
+                )
+            )
+
+        const otherPerson = personsByDistinctId.get(otherPersonDistinctId)
+        const mergeIntoPerson = personsByDistinctId.get(mergeIntoDistinctId)
 
         if (otherPerson && !mergeIntoPerson) {
             await this.db.addDistinctId(otherPerson, mergeIntoDistinctId)
@@ -371,20 +383,23 @@ export class PersonState {
                 otherPerson: otherPerson,
                 otherPersonDistinctId: otherPersonDistinctId,
             })
+        } else {
+            // The last case: (!oldPerson && !newPerson)
+            // TODO: Use distinct IDs fetched above to hint whether or not we
+            // may be able to take the fast path during person creation.
+            return await this.createPerson(
+                // TODO: in this case we could skip the properties updates later
+                timestamp,
+                this.eventProperties['$set'] || {},
+                this.eventProperties['$set_once'] || {},
+                teamId,
+                null,
+                true,
+                this.newUuid,
+                this.event.uuid,
+                [mergeIntoDistinctId, otherPersonDistinctId]
+            )
         }
-        //  The last case: (!oldPerson && !newPerson)
-        return await this.createPerson(
-            // TODO: in this case we could skip the properties updates later
-            timestamp,
-            this.eventProperties['$set'] || {},
-            this.eventProperties['$set_once'] || {},
-            teamId,
-            null,
-            true,
-            this.newUuid,
-            this.event.uuid,
-            [mergeIntoDistinctId, otherPersonDistinctId]
-        )
     }
 
     public async mergePeople({
