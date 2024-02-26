@@ -5,6 +5,7 @@ import {
     IconFunnels,
     IconHogQL,
     IconLifecycle,
+    IconPlusSmall,
     IconRetention,
     IconStar,
     IconStarFilled,
@@ -27,7 +28,6 @@ import {
     IconGridView,
     IconListView,
     IconPerson,
-    IconPlusMini,
     IconSelectEvents,
     IconTableChart,
 } from 'lib/lemon-ui/icons'
@@ -68,7 +68,7 @@ interface NewInsightButtonProps {
 export interface InsightTypeMetadata {
     name: string
     description?: string
-    icon: (props?: any) => JSX.Element
+    icon: (props?: any) => JSX.Element | null
     inMenu: boolean
 }
 
@@ -342,7 +342,7 @@ export function NewInsightButton({ dataAttr }: NewInsightButtonProps): JSX.Eleme
             }}
             data-attr="saved-insights-new-insight-button"
             size="small"
-            icon={<IconPlusMini />}
+            icon={<IconPlusSmall />}
         >
             New insight
         </LemonButton>

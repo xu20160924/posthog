@@ -1,10 +1,10 @@
-import { IconPin, IconPinFilled, IconShare } from '@posthog/icons'
+import { IconLock, IconPin, IconPinFilled, IconShare } from '@posthog/icons'
 import { LemonInput } from '@posthog/lemon-ui'
 import { useActions, useValues } from 'kea'
 import { MemberSelect } from 'lib/components/MemberSelect'
 import { ObjectTags } from 'lib/components/ObjectTags/ObjectTags'
 import { DashboardPrivilegeLevel } from 'lib/constants'
-import { IconCottage, IconLock } from 'lib/lemon-ui/icons'
+import { IconCottage } from 'lib/lemon-ui/icons'
 import { LemonButton } from 'lib/lemon-ui/LemonButton'
 import { More } from 'lib/lemon-ui/LemonButton/More'
 import { LemonDivider } from 'lib/lemon-ui/LemonDivider'
@@ -101,7 +101,9 @@ export function DashboardsTable({
                             )}
                             {isPrimary && (
                                 <Tooltip title="The primary dashboard is shown on the project home page.">
-                                    <IconCottage className="ml-1 text-base text-warning" />
+                                    <span>
+                                        <IconCottage className="ml-1 text-base text-warning" />
+                                    </span>
                                 </Tooltip>
                             )}
                         </div>

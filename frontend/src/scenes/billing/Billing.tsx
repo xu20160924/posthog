@@ -1,5 +1,6 @@
 import './Billing.scss'
 
+import { IconPlus } from '@posthog/icons'
 import { LemonButton, LemonDivider, LemonInput, Link } from '@posthog/lemon-ui'
 import clsx from 'clsx'
 import { useActions, useValues } from 'kea'
@@ -10,7 +11,7 @@ import { PageHeader } from 'lib/components/PageHeader'
 import { supportLogic } from 'lib/components/Support/supportLogic'
 import { dayjs } from 'lib/dayjs'
 import { useResizeBreakpoints } from 'lib/hooks/useResizeObserver'
-import { IconCheckCircleOutline, IconPlus } from 'lib/lemon-ui/icons'
+import { IconCheckCircleOutline } from 'lib/lemon-ui/icons'
 import { LemonBanner } from 'lib/lemon-ui/LemonBanner'
 import { LemonLabel } from 'lib/lemon-ui/LemonLabel/LemonLabel'
 import { SpinnerOverlay } from 'lib/lemon-ui/Spinner/Spinner'
@@ -212,12 +213,12 @@ export function Billing(): JSX.Element {
                                                                       )}`
                                                                     : null
                                                             }
-                                                            placement="bottomLeft"
+                                                            placement="bottom-start"
                                                         >
                                                             <strong>
                                                                 $
                                                                 {parseInt(billing.discount_amount_usd).toLocaleString()}
-                                                            </strong>{' '}
+                                                            </strong>
                                                         </Tooltip>
                                                         remaining credits applied to your bill.
                                                     </p>

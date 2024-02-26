@@ -1,15 +1,17 @@
+import { IconKeyboard, IconPinFilled } from '@posthog/icons'
 import clsx from 'clsx'
 import { useValues } from 'kea'
 import { FlaggedFeature } from 'lib/components/FlaggedFeature'
 import { PropertyIcon } from 'lib/components/PropertyIcon'
 import { TZLabel } from 'lib/components/TZLabel'
 import { FEATURE_FLAGS } from 'lib/constants'
-import { IconAutoAwesome, IconAutocapture, IconKeyboard, IconPinFilled, IconSchedule } from 'lib/lemon-ui/icons'
+import { IconAutoAwesome, IconAutocapture, IconSchedule } from 'lib/lemon-ui/icons'
 import { LemonButton } from 'lib/lemon-ui/LemonButton'
 import { LemonSkeleton } from 'lib/lemon-ui/LemonSkeleton'
 import { Popover } from 'lib/lemon-ui/Popover'
 import { Spinner } from 'lib/lemon-ui/Spinner'
 import { Tooltip } from 'lib/lemon-ui/Tooltip'
+import { featureFlagLogic } from 'lib/logic/featureFlagLogic'
 import { colonDelimitedDuration } from 'lib/utils'
 import { Fragment, useState } from 'react'
 import { DraggableToNotebook } from 'scenes/notebooks/AddToNotebook/DraggableToNotebook'
@@ -206,8 +208,11 @@ function FirstURL(props: { startUrl: string | undefined }): JSX.Element {
 }
 
 function PinnedIndicator(): JSX.Element | null {
+    const { featureFlags } = useValues(featureFlagLogic)
+    const isTestingSaved = featureFlags[FEATURE_FLAGS.SAVED_NOT_PINNED] === 'test'
+    const description = isTestingSaved ? 'saved' : 'pinned'
     return (
-        <Tooltip placement="topRight" title="This recording is pinned to this list.">
+        <Tooltip placement="top-end" title={<>This recording is {description} to this list.</>}>
             <IconPinFilled className="text-sm text-orange shrink-0" />
         </Tooltip>
     )

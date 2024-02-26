@@ -1,5 +1,4 @@
 import { useActions, useValues } from 'kea'
-import { CodeSnippet } from 'lib/components/CodeSnippet'
 import { htmlElementsDisplayLogic } from 'lib/components/HTMLElementsDisplay/htmlElementsDisplayLogic'
 import { ParsedCSSSelector } from 'lib/components/HTMLElementsDisplay/preselectWithCSS'
 import { LemonBanner } from 'lib/lemon-ui/LemonBanner'
@@ -29,7 +28,7 @@ function CloseAllTags({ elements }: { elements: ElementType[] }): JSX.Element {
                         }}
                     >
                         <pre
-                            className="whitespace-pre-wrap break-all p-0 m-0 rounded-none text-white text-sm"
+                            className="whitespace-pre-wrap break-all p-0 m-0 rounded-none text-default text-sm"
                             key={index}
                         >
                             {indent(elements.length - index - 2)}
@@ -130,8 +129,11 @@ export function HTMLElementsDisplay({
     return (
         <div className="flex flex-col gap-1">
             {editable && !!parsedElements.length && (
-                <div>
-                    Selector: <CodeSnippet thing="chosen selector">{chosenSelector}</CodeSnippet>
+                <div className="flex flex-col gap-2 mb-2">
+                    <div>Selector:</div>
+                    <div className="w-full border rounded bg-bg-3000 px-4 py-2 select-text">
+                        <pre className="m-0">{chosenSelector}</pre>
+                    </div>
                 </div>
             )}
             {checkUniqueness && (
@@ -144,12 +146,12 @@ export function HTMLElementsDisplay({
                     )}
                 </LemonBanner>
             )}
-            <div className="px-4 rounded bg-default">
+            <div className="px-4 rounded bg-bg-3000">
                 {parsedElements.length ? (
                     <>
                         {elementsToShowDepth ? (
                             <pre
-                                className="p-1 m-0 opacity-50 text-white text-sm cursor-pointer"
+                                className="p-1 m-0 opacity-50 text-default text-sm cursor-pointer"
                                 data-attr="elements-display-show-more-of-chain"
                                 onClick={showAdditionalElements}
                             >

@@ -16,10 +16,13 @@ from drf_spectacular.utils import extend_schema
 from loginas.utils import is_impersonated_session
 from rest_framework import exceptions, request, serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
+from rest_framework.utils.encoders import JSONEncoder
 
 from posthog.api.person import MinimalPersonSerializer
 from posthog.api.routing import TeamAndOrgViewSetMixin
+from posthog.api.utils import safe_clickhouse_string
 from posthog.auth import SharingAccessTokenAuthentication
 from posthog.cloud_utils import is_cloud
 from posthog.constants import SESSION_RECORDINGS_FILTER_IDS
@@ -27,9 +30,6 @@ from posthog.models import User
 from posthog.models.filters.session_recordings_filter import SessionRecordingsFilter
 from posthog.models.person.person import PersonDistinctId
 from posthog.session_recordings.models.session_recording import SessionRecording
-from posthog.permissions import (
-    SharingTokenPermission,
-)
 from posthog.session_recordings.models.session_recording_event import (
     SessionRecordingViewed,
 )
@@ -47,7 +47,8 @@ from posthog.rate_limit import (
 )
 from posthog.session_recordings.queries.session_replay_events import SessionReplayEvents
 from posthog.session_recordings.realtime_snapshots import get_realtime_snapshots, publish_subscription
-from posthog.session_recordings.session_summary.summarize_session import summarize_recording
+from ee.session_recordings.session_summary.summarize_session import summarize_recording
+from ee.session_recordings.ai.similar_recordings import similar_recordings
 from posthog.session_recordings.snapshots.convert_legacy_snapshots import (
     convert_original_version_lts_recording,
 )
@@ -60,6 +61,26 @@ SNAPSHOT_SOURCE_REQUESTED = Counter(
     "When calling the API and providing a concrete snapshot type to load.",
     labelnames=["source"],
 )
+
+
+class SurrogatePairSafeJSONEncoder(JSONEncoder):
+    def encode(self, o):
+        return safe_clickhouse_string(super().encode(o), with_counter=False)
+
+
+class SurrogatePairSafeJSONRenderer(JSONRenderer):
+    """
+    Blob snapshots are compressed data which we pass through from blob storage.
+    Realtime snapshot API returns "bare" JSON from Redis.
+    We can be sure that the "bare" data could contain surrogate pairs
+    from the browser's console logs.
+
+    This JSON renderer ensures that the stringified JSON does not have any unescaped surrogate pairs.
+
+    Because it has to override the encoder, it can't use orjson.
+    """
+
+    encoder_class = SurrogatePairSafeJSONEncoder
 
 
 # context manager for gathering a sequence of server timings
@@ -179,20 +200,13 @@ def list_recordings_response(
 
 # NOTE: Could we put the sharing stuff in the shared mixin :thinking:
 class SessionRecordingViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
+    scope_object = "session_recording"
     throttle_classes = [ClickHouseBurstRateThrottle, ClickHouseSustainedRateThrottle]
     serializer_class = SessionRecordingSerializer
     # We don't use this
     queryset = SessionRecording.objects.none()
 
     sharing_enabled_actions = ["retrieve", "snapshots", "snapshot_file"]
-
-    def get_permissions(self):
-        if isinstance(self.request.successful_authenticator, SharingAccessTokenAuthentication):
-            return [SharingTokenPermission()]
-        return super().get_permissions()
-
-    def get_authenticators(self):
-        return [SharingAccessTokenAuthentication(), *super().get_authenticators()]
 
     def get_serializer_class(self) -> Type[serializers.Serializer]:
         if isinstance(self.request.successful_authenticator, SharingAccessTokenAuthentication):
@@ -282,7 +296,7 @@ class SessionRecordingViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
 
         return Response({"success": True})
 
-    @action(methods=["GET"], detail=True)
+    @action(methods=["GET"], detail=True, renderer_classes=[SurrogatePairSafeJSONRenderer])
     def snapshots(self, request: request.Request, **kwargs):
         """
         Snapshots can be loaded from multiple places:
@@ -351,7 +365,10 @@ class SessionRecordingViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
                 for full_key in blob_keys:
                     # Keys are like 1619712000-1619712060
                     blob_key = full_key.replace(blob_prefix.rstrip("/") + "/", "")
-                    time_range = [datetime.fromtimestamp(int(x) / 1000, tz=timezone.utc) for x in blob_key.split("-")]
+                    blob_key_base = blob_key.split(".")[0]  # Remove the extension if it exists
+                    time_range = [
+                        datetime.fromtimestamp(int(x) / 1000, tz=timezone.utc) for x in blob_key_base.split("-")
+                    ]
 
                     sources.append(
                         {
@@ -387,7 +404,19 @@ class SessionRecordingViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
             response_data["sources"] = sources
 
         elif source == "realtime":
-            snapshots = get_realtime_snapshots(team_id=self.team.pk, session_id=str(recording.session_id)) or []
+            if request.GET.get("version", None) == "3" and settings.RECORDINGS_INGESTER_URL:
+                with requests.get(
+                    url=f"{settings.RECORDINGS_INGESTER_URL}/api/projects/{self.team.pk}/session_recordings/{str(recording.session_id)}/snapshots",
+                    stream=True,
+                ) as r:
+                    if r.status_code == 404:
+                        return Response({"snapshots": []})
+
+                    response = HttpResponse(content=r.raw, content_type="application/json")
+                    response["Content-Disposition"] = "inline"
+                    return response
+            else:
+                snapshots = get_realtime_snapshots(team_id=self.team.pk, session_id=str(recording.session_id)) or []
 
             event_properties["source"] = "realtime"
             event_properties["snapshots_length"] = len(snapshots)
@@ -512,6 +541,35 @@ class SessionRecordingViewSet(TeamAndOrgViewSetMixin, viewsets.GenericViewSet):
             r.headers["Server-Timing"] = ", ".join(
                 f"{key};dur={round(duration, ndigits=2)}" for key, duration in timings.items()
             )
+        return r
+
+    @action(methods=["GET"], detail=True)
+    def similar_sessions(self, request: request.Request, **kwargs):
+        if not request.user.is_authenticated:
+            raise exceptions.NotAuthenticated()
+
+        cache_key = f'similar_sessions_{self.team.pk}_{self.kwargs["pk"]}'
+        # Check if the response is cached
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return Response(cached_response)
+
+        user = cast(User, request.user)
+
+        if not posthoganalytics.feature_enabled("session-replay-similar-recordings", str(user.distinct_id)):
+            raise exceptions.ValidationError("similar recordings is not enabled for this user")
+
+        recording = self.get_object()
+
+        if not SessionReplayEvents().exists(session_id=str(recording.session_id), team=self.team):
+            raise exceptions.NotFound("Recording not found")
+
+        recordings = similar_recordings(recording, self.team)
+        if recordings:
+            cache.set(cache_key, recordings, timeout=30)
+
+        # let the browser cache for half the time we cache on the server
+        r = Response(recordings, headers={"Cache-Control": "max-age=15"})
         return r
 
 
