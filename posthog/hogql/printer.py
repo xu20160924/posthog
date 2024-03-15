@@ -864,7 +864,8 @@ class _Printer(Visitor):
                 elif node.name == "hogql_lookupOrganicMediumType":
                     return f"dictGetOrNull('channel_definition_dict', 'type_if_organic', (coalesce({args[0]}, ''), 'medium'))"
                 elif node.name == "hogql_lookupPersonIdOverride":
-                    return f"dictGetOrDefault(person_distinct_id_overrides_dict, 'person_id', ({args[0]}, {args[1]}), {args[2]})"
+                    # TODO: `context.team_id` value is optional -- what makes sense to do here if unset?
+                    return f"dictGetOrDefault(person_distinct_id_overrides_dict, 'person_id', ({self.context.team_id}, {args[0]}), {args[1]})"
             raise HogQLException(f"Unexpected unresolved HogQL function '{node.name}(...)'")
         else:
             close_matches = get_close_matches(node.name, ALL_EXPOSED_FUNCTION_NAMES, 1)

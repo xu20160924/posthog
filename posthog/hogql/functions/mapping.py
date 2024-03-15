@@ -756,7 +756,7 @@ HOGQL_POSTHOG_FUNCTIONS: Dict[str, HogQLFunctionMeta] = {
     "hogql_lookupOrganicDomainType": HogQLFunctionMeta("hogql_lookupOrganicDomainType", 1, 1),
     "hogql_lookupOrganicSourceType": HogQLFunctionMeta("hogql_lookupOrganicSourceType", 1, 1),
     "hogql_lookupOrganicMediumType": HogQLFunctionMeta("hogql_lookupOrganicMediumType", 1, 1),
-    "hogql_lookupPersonIdOverride": HogQLFunctionMeta("hogql_lookupPersonIdOverride", 3, 3),
+    "hogql_lookupPersonIdOverride": HogQLFunctionMeta("hogql_lookupPersonIdOverride", 2, 2),
 }
 
 ALL_EXPOSED_FUNCTION_NAMES = [
