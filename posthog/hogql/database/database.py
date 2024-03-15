@@ -191,7 +191,7 @@ def create_hogql_database(
         database.events.fields["person_id"] = ExpressionField(
             name="person_id",
             expr=parse_expr(
-                "dictGetOrDefault(person_distinct_id_overrides_dict, 'person_id', (team_id, distinct_id), event_person_id)",
+                "hogql_lookupPersonIdOverride(team_id, distinct_id, event_person_id)",
                 start=None,
             ),
         )
