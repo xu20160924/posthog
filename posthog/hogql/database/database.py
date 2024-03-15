@@ -186,6 +186,16 @@ def create_hogql_database(
         database.events.fields["poe"].fields["id"] = database.events.fields["person_id"]
         database.events.fields["person"] = FieldTraverser(chain=["poe"])
 
+    elif modifiers.personsOnEventsMode == PersonsOnEventsMode.v3_enabled:
+        database.events.fields["event_person_id"] = StringDatabaseField(name="person_id")
+        database.events.fields["person_id"] = ExpressionField(
+            name="person_id",
+            expr=parse_expr(
+                "dictGetOrDefault(person_distinct_id_overrides_dict, 'person_id', (team_id, distinct_id), event_person_id)",
+                start=None,
+            ),
+        )
+
     database.persons.fields["$virt_initial_referring_domain_type"] = create_initial_domain_type(
         "$virt_initial_referring_domain_type"
     )
