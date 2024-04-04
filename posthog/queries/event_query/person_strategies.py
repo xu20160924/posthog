@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
+
 
 class EventsQueryPersonStrategy(ABC):
     @abstractmethod
@@ -9,6 +11,24 @@ class EventsQueryPersonStrategy(ABC):
 
     def get_person_id_join_clause(self) -> str:
         raise NotImplementedError
+
+
+@dataclass
+class JoinOnPersonDistinctIdStrategy(EventsQueryPersonStrategy):
+    event_table_alias: str
+    distinct_id_table_alias: str
+
+    def get_person_id_column(self) -> str:
+        return f"{self.distinct_id_table_alias}.person_id"
+
+    def get_person_id_join_clause(self) -> str:
+        # XXX: `relevant_events_conditions` not in scope, used
+        return f"""
+            INNER JOIN (
+                {get_team_distinct_ids_query(relevant_events_conditions=relevant_events_conditions)}
+            ) AS {self.distinct_id_table_alias}
+            ON {self.event_table_alias}.distinct_id = {self.distinct_id_table_alias}.distinct_id
+        """
 
 
 @dataclass
