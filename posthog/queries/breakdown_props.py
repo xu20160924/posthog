@@ -24,7 +24,7 @@ from posthog.models.property.util import (
 from posthog.models.team import Team
 from posthog.models.team.team import groups_on_events_querying_enabled
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
-from posthog.queries.event_query import EventsQueryPersonStrategy
+from posthog.queries.event_query.person_strategies import EventsQueryPersonStrategy
 from posthog.queries.groups_join_query import GroupsJoinQuery
 from posthog.queries.insight import insight_sync_execute
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query

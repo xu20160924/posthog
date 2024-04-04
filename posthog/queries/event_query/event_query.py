@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from posthog.clickhouse.materialized_columns import ColumnName
@@ -16,34 +15,13 @@ from posthog.models.property import PropertyGroup, PropertyName
 from posthog.models.property.util import parse_prop_grouped_clauses
 from posthog.models.team import Team
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
+from posthog.queries.event_query.person_strategies import EventsQueryPersonStrategy
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
 from posthog.queries.person_query import PersonQuery
 from posthog.queries.query_date_range import QueryDateRange
 from posthog.session_recordings.queries.session_query import SessionQuery
 from posthog.queries.util import PersonPropertiesMode
 from posthog.utils import PersonOnEventsMode
-
-
-@dataclass
-class EventsQueryPersonStrategy:
-    event_table_alias: str
-    person_overrides_table_alias: str = "overrides"
-
-    def get_person_id_column(self) -> str:
-        return f"if(notEmpty({self.person_overrides_table_alias}.person_id), {self.person_overrides_table_alias}.person_id, {self.event_table_alias}.person_id)"
-
-    def get_person_id_join_clause(self) -> str:
-        return f"""\
-            LEFT OUTER JOIN (
-                SELECT
-                    argMax(override_person_id, version) as person_id,
-                    old_person_id
-                FROM person_overrides
-                WHERE team_id = %(team_id)s
-                GROUP BY old_person_id
-            ) AS {self.person_overrides_table_alias}
-            ON {self.event_table_alias}.person_id = {self.person_overrides_table_alias}.old_person_id
-        """
 
 
 class EventQuery(metaclass=ABCMeta):
