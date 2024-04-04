@@ -24,10 +24,10 @@ from posthog.models.property.util import (
 from posthog.models.team import Team
 from posthog.models.team.team import groups_on_events_querying_enabled
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
+from posthog.queries.event_query import EventsQueryPersonStrategy
 from posthog.queries.groups_join_query import GroupsJoinQuery
 from posthog.queries.insight import insight_sync_execute
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
-from posthog.queries.person_on_events_v2_sql import PERSON_OVERRIDES_JOIN_SQL
 from posthog.queries.person_query import PersonQuery
 from posthog.queries.query_date_range import QueryDateRange
 from posthog.session_recordings.queries.session_query import SessionQuery
@@ -99,10 +99,12 @@ def get_breakdown_prop_values(
             if person_properties_mode != PersonPropertiesMode.DIRECT_ON_EVENTS_WITH_POE_V2
             else props_to_filter
         )
+
+        person_overrides_table_alias = "overrides"  # XXX: this should just reference the strategy instance attribute
         person_id_joined_alias = (
             "pdi.person_id"
             if person_properties_mode != PersonPropertiesMode.DIRECT_ON_EVENTS_WITH_POE_V2
-            else "if(notEmpty(overrides.person_id), overrides.person_id, e.person_id)"
+            else f"if(notEmpty({person_overrides_table_alias}.person_id), {person_overrides_table_alias}.person_id, e.person_id)"
         )
 
         person_query = PersonQuery(
@@ -112,9 +114,10 @@ def get_breakdown_prop_values(
             entity=entity if not use_all_funnel_entities else None,
         )
         if person_properties_mode == PersonPropertiesMode.DIRECT_ON_EVENTS_WITH_POE_V2:
-            person_join_clauses = PERSON_OVERRIDES_JOIN_SQL.format(
-                event_table_alias="e", person_overrides_table_alias="overrides"
-            )
+            person_join_clauses = EventsQueryPersonStrategy(
+                event_table_alias="e",
+                person_overrides_table_alias=person_overrides_table_alias,
+            ).get_person_id_join_clause()
         elif person_query.is_used:
             person_subquery, person_join_params = person_query.get_query()
             person_join_clauses = f"""

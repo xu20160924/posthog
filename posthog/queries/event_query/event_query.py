@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from posthog.clickhouse.materialized_columns import ColumnName
@@ -21,7 +22,28 @@ from posthog.queries.query_date_range import QueryDateRange
 from posthog.session_recordings.queries.session_query import SessionQuery
 from posthog.queries.util import PersonPropertiesMode
 from posthog.utils import PersonOnEventsMode
-from posthog.queries.person_on_events_v2_sql import PERSON_OVERRIDES_JOIN_SQL
+
+
+@dataclass
+class EventsQueryPersonStrategy:
+    event_table_alias: str
+    person_overrides_table_alias: str = "overrides"
+
+    def get_person_id_column(self) -> str:
+        return f"if(notEmpty({self.person_overrides_table_alias}.person_id), {self.person_overrides_table_alias}.person_id, {self.event_table_alias}.person_id)"
+
+    def get_person_id_join_clause(self) -> str:
+        return f"""\
+            LEFT OUTER JOIN (
+                SELECT
+                    argMax(override_person_id, version) as person_id,
+                    old_person_id
+                FROM person_overrides
+                WHERE team_id = %(team_id)s
+                GROUP BY old_person_id
+            ) AS {self.person_overrides_table_alias}
+            ON {self.event_table_alias}.person_id = {self.person_overrides_table_alias}.old_person_id
+        """
 
 
 class EventQuery(metaclass=ABCMeta):
@@ -29,7 +51,6 @@ class EventQuery(metaclass=ABCMeta):
     PERSON_TABLE_ALIAS = "person"
     SESSION_TABLE_ALIAS = "sessions"
     EVENT_TABLE_ALIAS = "e"
-    PERSON_ID_OVERRIDES_TABLE_ALIAS = "overrides"
 
     _filter: AnyFilter
     _team_id: int
@@ -121,7 +142,7 @@ class EventQuery(metaclass=ABCMeta):
 
     def _get_person_id_alias(self, person_on_events_mode) -> str:
         if person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            return f"if(notEmpty({self.PERSON_ID_OVERRIDES_TABLE_ALIAS}.person_id), {self.PERSON_ID_OVERRIDES_TABLE_ALIAS}.person_id, {self.EVENT_TABLE_ALIAS}.person_id)"
+            return EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
         elif person_on_events_mode == PersonOnEventsMode.V1_ENABLED:
             return f"{self.EVENT_TABLE_ALIAS}.person_id"
 
@@ -132,10 +153,7 @@ class EventQuery(metaclass=ABCMeta):
             return ""
 
         if self._person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            return PERSON_OVERRIDES_JOIN_SQL.format(
-                person_overrides_table_alias=self.PERSON_ID_OVERRIDES_TABLE_ALIAS,
-                event_table_alias=self.EVENT_TABLE_ALIAS,
-            )
+            return EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause()
 
         return f"""
             INNER JOIN (

@@ -37,7 +37,7 @@ from posthog.queries.breakdown_props import (
     get_breakdown_prop_values,
 )
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
-from posthog.queries.event_query import EventQuery
+from posthog.queries.event_query import EventQuery, EventsQueryPersonStrategy
 from posthog.queries.groups_join_query import GroupsJoinQuery
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
 from posthog.queries.person_query import PersonQuery
@@ -80,7 +80,6 @@ from posthog.utils import (
     encode_get_request_params,
     generate_short_id,
 )
-from posthog.queries.person_on_events_v2_sql import PERSON_OVERRIDES_JOIN_SQL
 
 BREAKDOWN_OTHER_STRING_LABEL = "$$_posthog_breakdown_other_$$"
 BREAKDOWN_OTHER_NUMERIC_LABEL = 9007199254740991  # pow(2, 53) - 1, for JS compatibility
@@ -91,7 +90,6 @@ BREAKDOWN_NULL_NUMERIC_LABEL = 9007199254740990  # pow(2, 53) - 2, for JS compat
 class TrendsBreakdown:
     DISTINCT_ID_TABLE_ALIAS = EventQuery.DISTINCT_ID_TABLE_ALIAS
     EVENT_TABLE_ALIAS = EventQuery.EVENT_TABLE_ALIAS
-    PERSON_ID_OVERRIDES_TABLE_ALIAS = EventQuery.PERSON_ID_OVERRIDES_TABLE_ALIAS
 
     def __init__(
         self,
@@ -111,7 +109,7 @@ class TrendsBreakdown:
         self.add_person_urls = add_person_urls
         self.person_on_events_mode = person_on_events_mode
         if person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            self._person_id_alias = f"if(notEmpty({self.PERSON_ID_OVERRIDES_TABLE_ALIAS}.person_id), {self.PERSON_ID_OVERRIDES_TABLE_ALIAS}.person_id, {self.EVENT_TABLE_ALIAS}.person_id)"
+            self._person_id_alias = EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
         elif person_on_events_mode == PersonOnEventsMode.V1_ENABLED:
             self._person_id_alias = f"{self.EVENT_TABLE_ALIAS}.person_id"
         else:
@@ -752,10 +750,7 @@ class TrendsBreakdown:
 
         if self.person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
             return (
-                PERSON_OVERRIDES_JOIN_SQL.format(
-                    person_overrides_table_alias=self.PERSON_ID_OVERRIDES_TABLE_ALIAS,
-                    event_table_alias=self.EVENT_TABLE_ALIAS,
-                ),
+                EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause(),
                 {"team_id": self.team_id},
             )
 
