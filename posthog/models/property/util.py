@@ -248,7 +248,7 @@ def parse_prop_clauses(
                     " {property_operator} {table_name}distinct_id IN ({filter_query})".format(
                         filter_query=GET_DISTINCT_IDS_BY_PROPERTY_SQL.format(
                             filters=filter_query,
-                            GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(team_id),
+                            GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
                         ),
                         table_name=table_formatted,
                         property_operator=property_operator,
@@ -358,7 +358,7 @@ def parse_prop_clauses(
                 # :TODO: (performance) Avoid subqueries whenever possible, use joins instead
                 subquery = GET_DISTINCT_IDS_BY_PERSON_ID_FILTER.format(
                     filters=filter_query,
-                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(team_id),
+                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
                 )
                 final.append(f"{property_operator} {table_formatted}distinct_id IN ({subquery})")
             params.update(filter_params)

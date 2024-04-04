@@ -443,7 +443,7 @@ class FunnelCorrelation:
 
         else:
             aggregation_person_join = f"""
-                JOIN ({get_team_distinct_ids_query(self._team.pk)}) AS pdi
+                JOIN ({get_team_distinct_ids_query()}) AS pdi
                         ON pdi.distinct_id = events.distinct_id
 
                     -- NOTE: I would love to right join here, so we count get total

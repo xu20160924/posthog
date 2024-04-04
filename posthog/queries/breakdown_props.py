@@ -121,12 +121,12 @@ def get_breakdown_prop_values(
         elif person_query.is_used:
             person_subquery, person_join_params = person_query.get_query()
             person_join_clauses = f"""
-                INNER JOIN ({get_team_distinct_ids_query(team.pk)}) AS pdi ON e.distinct_id = pdi.distinct_id
+                INNER JOIN ({get_team_distinct_ids_query()}) AS pdi ON e.distinct_id = pdi.distinct_id
                 INNER JOIN ({person_subquery}) person ON pdi.person_id = person.id
             """
         elif entity.math in (WEEKLY_ACTIVE, MONTHLY_ACTIVE) or column_optimizer.is_using_cohort_propertes:
             person_join_clauses = f"""
-                INNER JOIN ({get_team_distinct_ids_query(team.pk)}) AS pdi ON e.distinct_id = pdi.distinct_id
+                INNER JOIN ({get_team_distinct_ids_query()}) AS pdi ON e.distinct_id = pdi.distinct_id
             """
 
         groups_join_clause, groups_join_params = GroupsJoinQuery(filter, team.pk, column_optimizer).get_join_query()

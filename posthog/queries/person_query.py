@@ -307,7 +307,7 @@ class PersonQuery:
             id_conditions_param = f"id_conditions_{prepend}"
             id_conditions_sql = f"""
             id IN (
-                SELECT person_id FROM ({get_team_distinct_ids_query(self._team_id)})
+                SELECT person_id FROM ({get_team_distinct_ids_query()})
                 WHERE distinct_id = %({id_conditions_param})s
             )
             """
@@ -372,7 +372,7 @@ class PersonQuery:
         if self._filter.distinct_id:
             distinct_id_clause = f"""
             AND id IN (
-                SELECT person_id FROM ({get_team_distinct_ids_query(self._team_id)}) where distinct_id = %(distinct_id_filter)s
+                SELECT person_id FROM ({get_team_distinct_ids_query()}) where distinct_id = %(distinct_id_filter)s
             )
             """
             return distinct_id_clause, {"distinct_id_filter": self._filter.distinct_id}
@@ -390,7 +390,7 @@ class PersonQuery:
         ORDER BY created_at desc, id desc
         """.format(
                 person_query=query,
-                distinct_id_query=get_team_distinct_ids_query(self._team_id),
+                distinct_id_query=get_team_distinct_ids_query(),
             ),
             params,
         )

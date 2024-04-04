@@ -281,7 +281,7 @@ class TrendsBreakdown:
                     interval_func=interval_func,
                     breakdown_value=breakdown_value,
                     conditions=conditions,
-                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(self.team_id),
+                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
                     sample_clause=sample_clause,
                     **active_user_format_params,
                     **breakdown_filter_params,
@@ -350,7 +350,7 @@ class TrendsBreakdown:
                     timestamp_truncated=get_start_of_interval_sql(self.filter.interval, team=self.team),
                     breakdown_value=breakdown_value,
                     conditions=conditions,
-                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(self.team_id),
+                    GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
                     sample_clause=sample_clause,
                     **active_user_format_params,
                     **breakdown_filter_params,
@@ -756,9 +756,7 @@ class TrendsBreakdown:
             )
 
         person_query = PersonQuery(self.filter, self.team_id, self.column_optimizer, entity=self.entity)
-        event_join = EVENT_JOIN_PERSON_SQL.format(
-            GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(self.team_id)
-        )
+        event_join = EVENT_JOIN_PERSON_SQL.format(GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query())
         if person_query.is_used:
             query, params = person_query.get_query()
             return (

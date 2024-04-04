@@ -205,7 +205,7 @@ def format_filter_query(
     person_id_query = CALCULATE_COHORT_PEOPLE_SQL.format(
         query=person_query,
         id_column=id_column,
-        GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(cohort.team_id),
+        GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
     )
     return person_id_query, params
 
@@ -247,7 +247,7 @@ def get_person_ids_by_cohort_id(
             person_query=GET_LATEST_PERSON_SQL,
             distinct_query=filter_query,
             query="",
-            GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(team.pk),
+            GET_TEAM_PERSON_DISTINCT_IDS=get_team_distinct_ids_query(),
             offset="OFFSET %(offset)s" if offset else "",
             limit="ORDER BY _timestamp ASC LIMIT %(limit)s" if limit else "",
         ),

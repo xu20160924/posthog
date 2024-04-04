@@ -114,7 +114,7 @@ class RelatedActorsQuery:
 
     @property
     def _distinct_ids_join(self):
-        return f"JOIN ({get_team_distinct_ids_query(self.team.pk)}) {self.DISTINCT_ID_TABLE_ALIAS} on e.distinct_id = {self.DISTINCT_ID_TABLE_ALIAS}.distinct_id"
+        return f"JOIN ({get_team_distinct_ids_query()}) {self.DISTINCT_ID_TABLE_ALIAS} on e.distinct_id = {self.DISTINCT_ID_TABLE_ALIAS}.distinct_id"
 
     @cached_property
     def _params(self):
