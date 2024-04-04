@@ -1,8 +1,18 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
+class EventsQueryPersonStrategy(ABC):
+    @abstractmethod
+    def get_person_id_column(self) -> str:
+        raise NotImplementedError
+
+    def get_person_id_join_clause(self) -> str:
+        raise NotImplementedError
+
+
 @dataclass
-class EventsQueryPersonStrategy:
+class PersonOverridesStrategy(EventsQueryPersonStrategy):
     event_table_alias: str
     person_overrides_table_alias: str = "overrides"
 

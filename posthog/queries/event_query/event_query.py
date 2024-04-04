@@ -15,7 +15,7 @@ from posthog.models.property import PropertyGroup, PropertyName
 from posthog.models.property.util import parse_prop_grouped_clauses
 from posthog.models.team import Team
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
-from posthog.queries.event_query.person_strategies import EventsQueryPersonStrategy
+from posthog.queries.event_query.person_strategies import PersonOverridesStrategy
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
 from posthog.queries.person_query import PersonQuery
 from posthog.queries.query_date_range import QueryDateRange
@@ -120,7 +120,7 @@ class EventQuery(metaclass=ABCMeta):
 
     def _get_person_id_alias(self, person_on_events_mode) -> str:
         if person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            return EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
+            return PersonOverridesStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
         elif person_on_events_mode == PersonOnEventsMode.V1_ENABLED:
             return f"{self.EVENT_TABLE_ALIAS}.person_id"
 
@@ -131,7 +131,7 @@ class EventQuery(metaclass=ABCMeta):
             return ""
 
         if self._person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            return EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause()
+            return PersonOverridesStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause()
 
         return f"""
             INNER JOIN (

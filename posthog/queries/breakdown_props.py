@@ -24,7 +24,7 @@ from posthog.models.property.util import (
 from posthog.models.team import Team
 from posthog.models.team.team import groups_on_events_querying_enabled
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
-from posthog.queries.event_query.person_strategies import EventsQueryPersonStrategy
+from posthog.queries.event_query.person_strategies import PersonOverridesStrategy
 from posthog.queries.groups_join_query import GroupsJoinQuery
 from posthog.queries.insight import insight_sync_execute
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
@@ -114,7 +114,7 @@ def get_breakdown_prop_values(
             entity=entity if not use_all_funnel_entities else None,
         )
         if person_properties_mode == PersonPropertiesMode.DIRECT_ON_EVENTS_WITH_POE_V2:
-            person_join_clauses = EventsQueryPersonStrategy(
+            person_join_clauses = PersonOverridesStrategy(
                 event_table_alias="e",
                 person_overrides_table_alias=person_overrides_table_alias,
             ).get_person_id_join_clause()

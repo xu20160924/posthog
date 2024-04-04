@@ -38,7 +38,7 @@ from posthog.queries.breakdown_props import (
 )
 from posthog.queries.column_optimizer.column_optimizer import ColumnOptimizer
 from posthog.queries.event_query import EventQuery
-from posthog.queries.event_query.person_strategies import EventsQueryPersonStrategy
+from posthog.queries.event_query.person_strategies import PersonOverridesStrategy
 from posthog.queries.groups_join_query import GroupsJoinQuery
 from posthog.queries.person_distinct_id_query import get_team_distinct_ids_query
 from posthog.queries.person_query import PersonQuery
@@ -110,7 +110,7 @@ class TrendsBreakdown:
         self.add_person_urls = add_person_urls
         self.person_on_events_mode = person_on_events_mode
         if person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
-            self._person_id_alias = EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
+            self._person_id_alias = PersonOverridesStrategy(self.EVENT_TABLE_ALIAS).get_person_id_column()
         elif person_on_events_mode == PersonOnEventsMode.V1_ENABLED:
             self._person_id_alias = f"{self.EVENT_TABLE_ALIAS}.person_id"
         else:
@@ -751,7 +751,7 @@ class TrendsBreakdown:
 
         if self.person_on_events_mode == PersonOnEventsMode.V2_ENABLED:
             return (
-                EventsQueryPersonStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause(),
+                PersonOverridesStrategy(self.EVENT_TABLE_ALIAS).get_person_id_join_clause(),
                 {"team_id": self.team_id},
             )
 
