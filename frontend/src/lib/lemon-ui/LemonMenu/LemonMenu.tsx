@@ -15,7 +15,10 @@ export interface LemonMenuItemBase
         LemonButtonProps,
         'icon' | 'sideIcon' | 'disabledReason' | 'tooltip' | 'active' | 'status' | 'data-attr'
     > {
-    label: string | JSX.Element
+    /** There must always be a string name for searchability. */
+    name: string
+    /** A rich label can also be provided, which will be used for actually displaying the option. */
+    label?: JSX.Element
     /** True if the item is a custom element. */
     custom?: boolean
 }

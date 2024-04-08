@@ -262,7 +262,7 @@ export class HedgehogActor {
                     // Only calculate block bounding rects once we need to
                     blocksWithBoundingRects = Array.from(
                         document.querySelectorAll(
-                            '.border, .border-t, .LemonButton--primary, .LemonButton--secondary:not(.LemonButton--status-alt:not(.LemonButton--active)), .LemonInput, .LemonSelect, .LemonTable'
+                            '.border, .border-t, .LemonButton--primary, .LemonButton--secondary:not(.LemonButton--status-alt:not(.LemonButton--active)), .LemonInput, .LemonTable'
                         )
                     ).map((block) => [block, block.getBoundingClientRect()])
                 }

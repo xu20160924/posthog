@@ -1,8 +1,8 @@
 import { IconX } from '@posthog/icons'
-import clsx from 'clsx'
 import React, { useMemo } from 'react'
 
 import { LemonButton, LemonButtonProps } from '../LemonButton'
+import { LemonInput } from '../LemonInput'
 import {
     isLemonMenuSection,
     LemonMenu,
@@ -61,7 +61,6 @@ export interface LemonSelectPropsBase<T>
         | 'aria-label'
         | 'onClick'
         | 'tabIndex'
-        | 'type'
     > {
     options: LemonSelectOptions<T>
     /** Callback fired when a value is selected, even if it already is set. */
@@ -72,6 +71,8 @@ export interface LemonSelectPropsBase<T>
     dropdownPlacement?: PopoverProps['placement']
     className?: string
     placeholder?: string
+    /** If not set explicitly, the input becomes searchable when there are 20 options or more. */
+    searchable?: boolean
     size?: LemonButtonProps['size']
     menu?: Pick<LemonMenuProps, 'className' | 'closeParentPopoverOnClickInside'>
 }
@@ -107,7 +108,7 @@ export function LemonSelect<T extends string | number | boolean | null>({
     dropdownMaxContentWidth = false,
     dropdownPlacement,
     allowClear = false,
-    className,
+    searchable,
     menu,
     renderButtonContent,
     ...buttonProps
@@ -126,21 +127,19 @@ export function LemonSelect<T extends string | number | boolean | null>({
     const activeLeaf = allLeafOptions.find((o) => o.value === value)
     const isClearButtonShown = allowClear && !!value
 
-    return (
-        <LemonMenu
-            items={items}
-            tooltipPlacement={optionTooltipPlacement}
-            matchWidth={dropdownMatchSelectWidth}
-            placement={dropdownPlacement}
-            className={menu?.className}
-            maxContentWidth={dropdownMaxContentWidth}
-            activeItemIndex={items
-                .flatMap((i) => (isLemonMenuSection(i) ? i.items.filter(Boolean) : i))
-                .findIndex((i) => (i as LemonMenuItem).active)}
-            closeParentPopoverOnClickInside={menu?.closeParentPopoverOnClickInside}
-        >
+    let child: JSX.Element
+    if (searchable) {
+        child = (
+            <LemonInput
+                placeholder={placeholder}
+                value={activeLeaf?.name} // NOTE: Icons currently not supported in searchable mode
+                allowClear
+                {...buttonProps}
+            />
+        )
+    } else {
+        child = (
             <LemonButton
-                className={clsx(className, 'LemonSelect')}
                 icon={activeLeaf?.icon}
                 type="secondary"
                 sideAction={
@@ -165,6 +164,23 @@ export function LemonSelect<T extends string | number | boolean | null>({
                         : value ?? <span className="text-muted">{placeholder}</span>}
                 </span>
             </LemonButton>
+        )
+    }
+
+    return (
+        <LemonMenu
+            items={items}
+            tooltipPlacement={optionTooltipPlacement}
+            matchWidth={dropdownMatchSelectWidth}
+            placement={dropdownPlacement}
+            className={menu?.className}
+            maxContentWidth={dropdownMaxContentWidth}
+            activeItemIndex={items
+                .flatMap((i) => (isLemonMenuSection(i) ? i.items.filter(Boolean) : i))
+                .findIndex((i) => (i as LemonMenuItem).active)}
+            closeParentPopoverOnClickInside={menu?.closeParentPopoverOnClickInside}
+        >
+            {child}
         </LemonMenu>
     )
 }
