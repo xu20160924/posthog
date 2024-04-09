@@ -45,10 +45,22 @@ export const OnboardingBillingStep = ({
                 product?.subscribed ? undefined : (
                     <BillingUpgradeCTA
                         // TODO: redirect path won't work properly until navigation is properly set up
-                        to={getUpgradeProductLink(product, plan.plan_key || '', redirectPath, true)}
+                        to={
+                            billing?.products
+                                ? getUpgradeProductLink({
+                                      product,
+                                      allProducts: billing?.products,
+                                      featureFlags,
+                                      upgradeToPlanKey: plan.plan_key || '',
+                                      redirectPath,
+                                      includeAddons: true,
+                                  })
+                                : undefined
+                        }
                         type="primary"
                         status="alt"
                         center
+                        loading={!billing?.products}
                         disableClientSideRouting
                         onClick={() => {
                             reportBillingUpgradeClicked(product.type)

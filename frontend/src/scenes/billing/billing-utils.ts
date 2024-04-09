@@ -1,4 +1,6 @@
+import { FEATURE_FLAGS } from 'lib/constants'
 import { dayjs } from 'lib/dayjs'
+import { FeatureFlagsSet } from 'lib/logic/featureFlagLogic'
 
 import { BillingProductV2Type, BillingV2TierType, BillingV2Type } from '~/types'
 
@@ -159,23 +161,46 @@ export const convertAmountToUsage = (
     return Math.round(usage)
 }
 
-export const getUpgradeProductLink = (
-    product: BillingProductV2Type,
-    upgradeToPlanKey: string,
-    redirectPath?: string,
-    includeAddons: boolean = true
-): string => {
+const buildProductQuery = (product: BillingProductV2Type, upgradeToPlanKey: string): string => {
+    return `${product.type}:${upgradeToPlanKey}`
+}
+
+const buildAddonQuery = (product: BillingProductV2Type): string => {
+    let url: string = ''
+    for (const addon of product.addons) {
+        if (
+            // TODO: this breaks if we support multiple plans per addon due to just grabbing the first plan
+            addon.plans?.[0]?.plan_key &&
+            !addon.inclusion_only
+        ) {
+            url += `${addon.type}:${addon.plans[0].plan_key},`
+        }
+    }
+    return url
+}
+
+export const getUpgradeProductLink = (opts: {
+    product: BillingProductV2Type
+    allProducts: BillingProductV2Type[]
+    upgradeToPlanKey: string
+    featureFlags: FeatureFlagsSet
+    redirectPath?: string
+    includeAddons?: boolean
+}): string => {
+    const { product, allProducts, upgradeToPlanKey, featureFlags, redirectPath, includeAddons = true } = opts
     let url = '/api/billing-v2/activation?products='
-    url += `${product.type}:${upgradeToPlanKey},`
-    if (includeAddons && product.addons?.length) {
-        for (const addon of product.addons) {
-            if (
-                // TODO: this breaks if we support multiple plans per addon due to just grabbing the first plan
-                addon.plans?.[0]?.plan_key &&
-                !addon.inclusion_only
-            ) {
-                url += `${addon.type}:${addon.plans[0].plan_key},`
+
+    if (featureFlags[FEATURE_FLAGS.SUBSCRIBE_TO_ALL_PRODUCTS]) {
+        for (const product of allProducts) {
+            url += `${buildProductQuery(product, upgradeToPlanKey)},`
+            if (includeAddons && product.addons?.length) {
+                url += buildAddonQuery(product)
             }
+        }
+    } else {
+        url += `${buildProductQuery(product, upgradeToPlanKey)},`
+        if (includeAddons && product.addons?.length) {
+            url += buildAddonQuery(product)
         }
     }
     // remove the trailing comma that will be at the end of the url

@@ -131,21 +131,38 @@ export const PlanComparison = ({
         'days'
     )
 
+    const getPlanLink = (plan: BillingV2PlanType, index: number): string | undefined => {
+        if (plan.contact_support) {
+            return 'mailto:sales@posthog.com?subject=Enterprise%20plan%20request'
+        }
+
+        if (!plan.included_if) {
+            if (billing?.products) {
+                return getUpgradeProductLink({
+                    product,
+                    allProducts: billing.products,
+                    featureFlags,
+                    upgradeToPlanKey: plan.plan_key || '',
+                    redirectPath,
+                    includeAddons,
+                })
+            } else {
+                return undefined
+            }
+        }
+
+        if (plan.included_if === 'has_subscription' && index >= currentPlanIndex && !billing?.has_active_subscription) {
+            return urls.organizationBilling()
+        }
+
+        return undefined
+    }
+
     const upgradeButtons = plans?.map((plan, i) => {
         return (
             <td key={`${plan.plan_key}-cta`} className="PlanTable__td__upgradeButton">
                 <BillingUpgradeCTA
-                    to={
-                        plan.contact_support
-                            ? 'mailto:sales@posthog.com?subject=Enterprise%20plan%20request'
-                            : !plan.included_if
-                            ? getUpgradeProductLink(product, plan.plan_key || '', redirectPath, includeAddons)
-                            : plan.included_if == 'has_subscription' &&
-                              i >= currentPlanIndex &&
-                              !billing?.has_active_subscription
-                            ? urls.organizationBilling()
-                            : undefined
-                    }
+                    to={getPlanLink(plan, i)}
                     type={plan.current_plan || i < currentPlanIndex ? 'secondary' : 'primary'}
                     status={
                         plan.current_plan || (plan.included_if == 'has_subscription' && i >= currentPlanIndex)
@@ -153,6 +170,7 @@ export const PlanComparison = ({
                             : 'alt'
                     }
                     fullWidth
+                    loading={!billing?.products}
                     center
                     disableClientSideRouting={!plan.contact_support}
                     disabledReason={

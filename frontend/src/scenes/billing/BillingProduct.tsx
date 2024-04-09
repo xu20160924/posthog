@@ -698,14 +698,21 @@ export const BillingProduct = ({ product }: { product: BillingProductV2Type }): 
                                         !upgradePlan.unit_amount_usd && (
                                             <BillingUpgradeCTA
                                                 data-attr={`${product.type}-upgrade-cta`}
-                                                to={getUpgradeProductLink(
-                                                    product,
-                                                    upgradeToPlanKey || '',
-                                                    redirectPath,
-                                                    isOnboarding // if in onboarding, we want to include addons, otherwise don't
-                                                )}
+                                                to={
+                                                    billing?.products
+                                                        ? getUpgradeProductLink({
+                                                              product,
+                                                              allProducts: billing?.products,
+                                                              featureFlags,
+                                                              upgradeToPlanKey: upgradeToPlanKey || '',
+                                                              redirectPath,
+                                                              includeAddons: isOnboarding, // if in onboarding, we want to include addons, otherwise don't
+                                                          })
+                                                        : undefined
+                                                }
                                                 type="primary"
                                                 icon={<IconPlus />}
+                                                loading={!billing?.products}
                                                 disableClientSideRouting
                                                 onClick={() => {
                                                     reportBillingUpgradeClicked(product.type)
