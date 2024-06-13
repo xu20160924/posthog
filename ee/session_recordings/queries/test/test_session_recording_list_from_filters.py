@@ -76,11 +76,11 @@ class TestClickhouseSessionRecordingsListFromSessionReplay(ClickhouseTestMixin, 
                 False,
             ],
             [
-                "test_poe_being_unavailable_we_fall_back_to_person_subquery",
+                "test_poe_being_unavailable_we_fall_back_to_person_id_overrides",
                 False,
                 False,
                 False,
-                PersonsOnEventsMode.DISABLED,
+                PersonsOnEventsMode.PERSON_ID_OVERRIDE_PROPERTIES_JOINED,
                 {
                     "kperson_filter_pre__0": "rgInternal",
                     "kpersonquery_person_filter_fin__0": "rgInternal",
