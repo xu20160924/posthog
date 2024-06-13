@@ -1216,7 +1216,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.1
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1230,7 +1230,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1240,7 +1239,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.10
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1254,7 +1253,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1264,7 +1262,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.11
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1278,7 +1276,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1368,7 +1365,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1435,7 +1431,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1502,7 +1497,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1522,7 +1516,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.13
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1536,7 +1530,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1546,7 +1539,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.14
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1560,7 +1553,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1570,7 +1562,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.15
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1584,7 +1576,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1674,7 +1665,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1741,7 +1731,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1808,7 +1797,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -1828,7 +1816,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.2
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1842,7 +1830,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1852,7 +1839,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.3
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1866,7 +1853,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1956,7 +1942,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2023,7 +2008,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2090,7 +2074,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2110,7 +2093,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.5
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -2124,7 +2107,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -2134,7 +2116,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.6
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -2148,7 +2130,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -2158,7 +2139,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.7
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -2172,7 +2153,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -2262,7 +2242,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2329,7 +2308,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2396,7 +2374,6 @@
                       AND event IN ['buy', 'play movie', 'sign up']
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (step_0 = 1
                            OR step_1 = 1
                            OR step_2 = 1) )))
@@ -2416,7 +2393,7 @@
 # name: TestUnorderedFunnelGroupBreakdown.test_funnel_breakdown_group.9
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -2430,7 +2407,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
