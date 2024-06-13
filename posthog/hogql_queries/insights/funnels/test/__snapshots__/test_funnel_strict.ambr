@@ -643,7 +643,7 @@
 # name: TestStrictFunnelGroupBreakdown.test_funnel_breakdown_group.1
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -657,7 +657,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -747,7 +746,6 @@
                     WHERE team_id = 2
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (1=1) )))
            WHERE step_0 = 1 ))
      GROUP BY aggregation_target,
@@ -765,7 +763,7 @@
 # name: TestStrictFunnelGroupBreakdown.test_funnel_breakdown_group.3
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -779,7 +777,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -869,7 +866,6 @@
                     WHERE team_id = 2
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (1=1) )))
            WHERE step_0 = 1 ))
      GROUP BY aggregation_target,
@@ -887,7 +883,7 @@
 # name: TestStrictFunnelGroupBreakdown.test_funnel_breakdown_group.5
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -901,7 +897,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -991,7 +986,6 @@
                     WHERE team_id = 2
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (1=1) )))
            WHERE step_0 = 1 ))
      GROUP BY aggregation_target,
@@ -1009,7 +1003,7 @@
 # name: TestStrictFunnelGroupBreakdown.test_funnel_breakdown_group.7
   '''
   
-  SELECT replaceRegexpAll(JSONExtractRaw(group0_properties, 'industry'), '^"|"$', '') AS value,
+  SELECT replaceRegexpAll(JSONExtractRaw(group_properties_0, 'industry'), '^"|"$', '') AS value,
          count(*) as count
   FROM events e
   LEFT JOIN
@@ -1023,7 +1017,6 @@
     AND event IN ['buy', 'play movie', 'sign up']
     AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
     AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-    AND notEmpty(e.person_id)
   GROUP BY value
   ORDER BY count DESC, value DESC
   LIMIT 26
@@ -1113,7 +1106,6 @@
                     WHERE team_id = 2
                       AND toTimeZone(timestamp, 'UTC') >= toDateTime('2020-01-01 00:00:00', 'UTC')
                       AND toTimeZone(timestamp, 'UTC') <= toDateTime('2020-01-08 23:59:59', 'UTC')
-                      AND notEmpty(e.person_id)
                       AND (1=1) )))
            WHERE step_0 = 1 ))
      GROUP BY aggregation_target,
