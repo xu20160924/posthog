@@ -54,7 +54,7 @@ def extend_api_router(
         r"role_access",
         feature_flag_role_access.FeatureFlagRoleAccessViewSet,
         "project_feature_flag_role_access",
-        ["team_id", "feature_flag_id"],
+        ["project_id", "feature_flag_id"],
     )
     organizations_router.register(
         r"resource_access",
@@ -73,7 +73,7 @@ def extend_api_router(
         r"collaborators",
         dashboard_collaborator.DashboardCollaboratorViewSet,
         "project_dashboard_collaborators",
-        ["team_id", "dashboard_id"],
+        ["project_id", "dashboard_id"],
     )
 
     projects_router.register(
@@ -83,7 +83,7 @@ def extend_api_router(
         r"session_recording_playlists",
         session_recording_playlist.SessionRecordingPlaylistViewSet,
         "project_session_recording_playlists",
-        ["team_id"],
+        ["project_id"],
     )
 
 
